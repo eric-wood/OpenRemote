@@ -1,0 +1,1332 @@
+   1               		.file	"wiznetping.c"
+   2               		.arch atmega168
+   3               	__SREG__ = 0x3f
+   4               	__SP_H__ = 0x3e
+   5               	__SP_L__ = 0x3d
+   6               	__tmp_reg__ = 0
+   7               	__zero_reg__ = 1
+   8               		.global __do_copy_data
+   9               		.global __do_clear_bss
+  12               		.text
+  13               	.Ltext0:
+  83               	.global	uart_str
+  84               		.data
+  87               	uart_str:
+  88 0000 0000 00   		.skip 3,0
+  89 0003 03        		.byte	3
+  90 0004 0000 0000 		.skip 4,0
+  91 0008 0000      		.word	pm(uart_putch)
+  92 000a 0000      		.word	pm(uart_getch)
+  93 000c 0000      		.word	0
+  94               		.text
+  96               	.global	uart_init
+  98               	uart_init:
+  99               		.stabd	46,0,0
+   0:wiznetping.c  **** /*****************************************************************************
+   1:wiznetping.c  **** //  File Name    : wiznetping.c
+   2:wiznetping.c  **** //  Version      : 1.0
+   3:wiznetping.c  **** //  Description  : Wiznet W5100
+   4:wiznetping.c  **** //  Author       : RWB
+   5:wiznetping.c  **** //  Target       : AVRJazz Mega168 Board
+   6:wiznetping.c  **** //  Compiler     : AVR-GCC 4.3.2; avr-libc 1.6.6 (WinAVR 20090313)
+   7:wiznetping.c  **** //  IDE          : Atmel AVR Studio 4.17
+   8:wiznetping.c  **** //  Programmer   : AVRJazz Mega168 STK500 v2.0 Bootloader
+   9:wiznetping.c  **** //               : AVR Visual Studio 4.17, STK500 programmer
+  10:wiznetping.c  **** //  Last Updated : 01 July 2010
+  11:wiznetping.c  **** *****************************************************************************/
+  12:wiznetping.c  **** #include <avr/io.h>
+  13:wiznetping.c  **** #include <string.h>
+  14:wiznetping.c  **** #include <stdio.h>
+  15:wiznetping.c  **** #include <util/delay.h>
+  16:wiznetping.c  **** 
+  17:wiznetping.c  **** #define BAUD_RATE 19200
+  18:wiznetping.c  **** // AVRJazz Mega168/328 SPI I/O
+  19:wiznetping.c  **** #define SPI_PORT PORTB
+  20:wiznetping.c  **** #define SPI_DDR  DDRB
+  21:wiznetping.c  **** #define SPI_CS   PORTB2
+  22:wiznetping.c  **** // Wiznet W5100 Op Code
+  23:wiznetping.c  **** #define WIZNET_WRITE_OPCODE 0xF0
+  24:wiznetping.c  **** #define WIZNET_READ_OPCODE 0x0F
+  25:wiznetping.c  **** // Wiznet W5100 Register Addresses
+  26:wiznetping.c  **** #define MR   0x0000   // Mode Register
+  27:wiznetping.c  **** #define GAR  0x0001   // Gateway Address: 0x0001 to 0x0004
+  28:wiznetping.c  **** #define SUBR 0x0005   // Subnet mask Address: 0x0005 to 0x0008
+  29:wiznetping.c  **** #define SAR  0x0009   // Source Hardware Address (MAC): 0x0009 to 0x000E
+  30:wiznetping.c  **** #define SIPR 0x000F   // Source IP Address: 0x000F to 0x0012
+  31:wiznetping.c  **** #define RMSR 0x001A   // RX Memory Size Register
+  32:wiznetping.c  **** #define TMSR 0x001B   // TX Memory Size Register
+  33:wiznetping.c  **** void uart_init(void)
+  34:wiznetping.c  **** {
+ 101               	.LM0:
+ 102               	/* prologue: frame size=0 */
+ 103               	/* prologue end (size=0) */
+  35:wiznetping.c  ****   UBRR0H = (((F_CPU/BAUD_RATE)/16)-1)>>8;	// set baud rate
+ 105               	.LM1:
+ 106 0000 1092 C500 		sts 197,__zero_reg__
+  36:wiznetping.c  ****   UBRR0L = (((F_CPU/BAUD_RATE)/16)-1);
+ 108               	.LM2:
+ 109 0004 82E0      		ldi r24,lo8(2)
+ 110 0006 8093 C400 		sts 196,r24
+  37:wiznetping.c  ****   UCSR0B = (1<<RXEN0)|(1<<TXEN0); 		// enable Rx & Tx
+ 112               	.LM3:
+ 113 000a 88E1      		ldi r24,lo8(24)
+ 114 000c 8093 C100 		sts 193,r24
+  38:wiznetping.c  ****   UCSR0C=  (1<<UCSZ01)|(1<<UCSZ00);  	       // config USART; 8N1
+ 116               	.LM4:
+ 117 0010 86E0      		ldi r24,lo8(6)
+ 118 0012 8093 C200 		sts 194,r24
+ 119               	/* epilogue: frame size=0 */
+ 120 0016 0895      		ret
+ 121               	/* epilogue end (size=1) */
+ 122               	/* function uart_init size 12 (11) */
+ 124               	.Lscope0:
+ 126               		.stabd	78,0,0
+ 128               	.global	uart_flush
+ 130               	uart_flush:
+ 131               		.stabd	46,0,0
+  39:wiznetping.c  **** }
+  40:wiznetping.c  **** void uart_flush(void)
+  41:wiznetping.c  **** {
+ 133               	.LM5:
+ 134               	/* prologue: frame size=0 */
+ 135               	/* prologue end (size=0) */
+ 136 0018 00C0      		rjmp .L4
+ 137               	.L5:
+  42:wiznetping.c  ****   unsigned char dummy;
+  43:wiznetping.c  ****   while (UCSR0A & (1<<RXC0)) dummy = UDR0;
+ 139               	.LM6:
+ 140 001a 8091 C600 		lds r24,198
+ 141               	.L4:
+ 142 001e 8091 C000 		lds r24,192
+ 143 0022 87FD      		sbrc r24,7
+ 144 0024 00C0      		rjmp .L5
+ 145               	/* epilogue: frame size=0 */
+ 146 0026 0895      		ret
+ 147               	/* epilogue end (size=1) */
+ 148               	/* function uart_flush size 8 (7) */
+ 153               	.Lscope1:
+ 155               		.stabd	78,0,0
+ 159               	.global	uart_putch
+ 161               	uart_putch:
+ 162               		.stabd	46,0,0
+  44:wiznetping.c  **** }
+  45:wiznetping.c  **** int uart_putch(char ch,FILE *stream)
+  46:wiznetping.c  **** {
+ 164               	.LM7:
+ 165               	/* prologue: frame size=0 */
+ 166 0028 1F93      		push r17
+ 167               	/* prologue end (size=1) */
+ 168 002a 182F      		mov r17,r24
+  47:wiznetping.c  ****    if (ch == '\n')
+ 170               	.LM8:
+ 171 002c 8A30      		cpi r24,lo8(10)
+ 172 002e 01F4      		brne .L13
+  48:wiznetping.c  ****     uart_putch('\r', stream);
+ 174               	.LM9:
+ 175 0030 8DE0      		ldi r24,lo8(13)
+ 176 0032 0E94 0000 		call uart_putch
+ 177               	.L13:
+  49:wiznetping.c  ****    while (!(UCSR0A & (1<<UDRE0)));
+ 179               	.LM10:
+ 180 0036 8091 C000 		lds r24,192
+ 181 003a 85FF      		sbrs r24,5
+ 182 003c 00C0      		rjmp .L13
+  50:wiznetping.c  ****    UDR0=ch;
+ 184               	.LM11:
+ 185 003e 1093 C600 		sts 198,r17
+  51:wiznetping.c  ****    return 0;
+  52:wiznetping.c  **** }
+ 187               	.LM12:
+ 188 0042 80E0      		ldi r24,lo8(0)
+ 189 0044 90E0      		ldi r25,hi8(0)
+ 190               	/* epilogue: frame size=0 */
+ 191 0046 1F91      		pop r17
+ 192 0048 0895      		ret
+ 193               	/* epilogue end (size=2) */
+ 194               	/* function uart_putch size 17 (14) */
+ 196               	.Lscope2:
+ 198               		.stabd	78,0,0
+ 201               	.global	uart_getch
+ 203               	uart_getch:
+ 204               		.stabd	46,0,0
+  53:wiznetping.c  **** int uart_getch(FILE *stream)
+  54:wiznetping.c  **** {
+ 206               	.LM13:
+ 207               	/* prologue: frame size=0 */
+ 208 004a 1F93      		push r17
+ 209               	/* prologue end (size=1) */
+ 210 004c BC01      		movw r22,r24
+ 211               	.L18:
+  55:wiznetping.c  ****    unsigned char ch;
+  56:wiznetping.c  ****    while (!(UCSR0A & (1<<RXC0)));
+ 213               	.LM14:
+ 214 004e 8091 C000 		lds r24,192
+ 215 0052 87FF      		sbrs r24,7
+ 216 0054 00C0      		rjmp .L18
+  57:wiznetping.c  ****    ch=UDR0;  
+ 218               	.LM15:
+ 219 0056 1091 C600 		lds r17,198
+  58:wiznetping.c  **** 
+  59:wiznetping.c  ****    /* Echo the Output Back to terminal */
+  60:wiznetping.c  ****    uart_putch(ch,stream);       
+ 221               	.LM16:
+ 222 005a 812F      		mov r24,r17
+ 223 005c 0E94 0000 		call uart_putch
+  61:wiznetping.c  **** 
+  62:wiznetping.c  ****    return ch;
+  63:wiznetping.c  **** }
+ 225               	.LM17:
+ 226 0060 812F      		mov r24,r17
+ 227 0062 9927      		clr r25
+ 228               	/* epilogue: frame size=0 */
+ 229 0064 1F91      		pop r17
+ 230 0066 0895      		ret
+ 231               	/* epilogue end (size=2) */
+ 232               	/* function uart_getch size 15 (12) */
+ 237               	.Lscope3:
+ 239               		.stabd	78,0,0
+ 241               	.global	ansi_cl
+ 243               	ansi_cl:
+ 244               		.stabd	46,0,0
+  64:wiznetping.c  **** void ansi_cl(void)
+  65:wiznetping.c  **** {
+ 246               	.LM18:
+ 247               	/* prologue: frame size=0 */
+ 248               	/* prologue end (size=0) */
+  66:wiznetping.c  ****   // ANSI clear screen: cl=\E[H\E[J
+  67:wiznetping.c  ****   putchar(27);
+ 250               	.LM19:
+ 251 0068 6091 0000 		lds r22,__iob+2
+ 252 006c 7091 0000 		lds r23,(__iob+2)+1
+ 253 0070 8BE1      		ldi r24,lo8(27)
+ 254 0072 90E0      		ldi r25,hi8(27)
+ 255 0074 0E94 0000 		call fputc
+  68:wiznetping.c  ****   putchar('[');
+ 257               	.LM20:
+ 258 0078 6091 0000 		lds r22,__iob+2
+ 259 007c 7091 0000 		lds r23,(__iob+2)+1
+ 260 0080 8BE5      		ldi r24,lo8(91)
+ 261 0082 90E0      		ldi r25,hi8(91)
+ 262 0084 0E94 0000 		call fputc
+  69:wiznetping.c  ****   putchar('H');
+ 264               	.LM21:
+ 265 0088 6091 0000 		lds r22,__iob+2
+ 266 008c 7091 0000 		lds r23,(__iob+2)+1
+ 267 0090 88E4      		ldi r24,lo8(72)
+ 268 0092 90E0      		ldi r25,hi8(72)
+ 269 0094 0E94 0000 		call fputc
+  70:wiznetping.c  ****   putchar(27);
+ 271               	.LM22:
+ 272 0098 6091 0000 		lds r22,__iob+2
+ 273 009c 7091 0000 		lds r23,(__iob+2)+1
+ 274 00a0 8BE1      		ldi r24,lo8(27)
+ 275 00a2 90E0      		ldi r25,hi8(27)
+ 276 00a4 0E94 0000 		call fputc
+  71:wiznetping.c  ****   putchar('[');
+ 278               	.LM23:
+ 279 00a8 6091 0000 		lds r22,__iob+2
+ 280 00ac 7091 0000 		lds r23,(__iob+2)+1
+ 281 00b0 8BE5      		ldi r24,lo8(91)
+ 282 00b2 90E0      		ldi r25,hi8(91)
+ 283 00b4 0E94 0000 		call fputc
+  72:wiznetping.c  ****   putchar('J');
+ 285               	.LM24:
+ 286 00b8 6091 0000 		lds r22,__iob+2
+ 287 00bc 7091 0000 		lds r23,(__iob+2)+1
+ 288 00c0 8AE4      		ldi r24,lo8(74)
+ 289 00c2 90E0      		ldi r25,hi8(74)
+ 290 00c4 0E94 0000 		call fputc
+ 291               	/* epilogue: frame size=0 */
+ 292 00c8 0895      		ret
+ 293               	/* epilogue end (size=1) */
+ 294               	/* function ansi_cl size 49 (48) */
+ 296               	.Lscope4:
+ 298               		.stabd	78,0,0
+ 300               	.global	ansi_me
+ 302               	ansi_me:
+ 303               		.stabd	46,0,0
+  73:wiznetping.c  **** }
+  74:wiznetping.c  **** void ansi_me(void)
+  75:wiznetping.c  **** {
+ 305               	.LM25:
+ 306               	/* prologue: frame size=0 */
+ 307               	/* prologue end (size=0) */
+  76:wiznetping.c  ****   // ANSI turn off all attribute: me=\E[0m
+  77:wiznetping.c  ****   putchar(27);
+ 309               	.LM26:
+ 310 00ca 6091 0000 		lds r22,__iob+2
+ 311 00ce 7091 0000 		lds r23,(__iob+2)+1
+ 312 00d2 8BE1      		ldi r24,lo8(27)
+ 313 00d4 90E0      		ldi r25,hi8(27)
+ 314 00d6 0E94 0000 		call fputc
+  78:wiznetping.c  ****   putchar('[');
+ 316               	.LM27:
+ 317 00da 6091 0000 		lds r22,__iob+2
+ 318 00de 7091 0000 		lds r23,(__iob+2)+1
+ 319 00e2 8BE5      		ldi r24,lo8(91)
+ 320 00e4 90E0      		ldi r25,hi8(91)
+ 321 00e6 0E94 0000 		call fputc
+  79:wiznetping.c  ****   putchar('0');
+ 323               	.LM28:
+ 324 00ea 6091 0000 		lds r22,__iob+2
+ 325 00ee 7091 0000 		lds r23,(__iob+2)+1
+ 326 00f2 80E3      		ldi r24,lo8(48)
+ 327 00f4 90E0      		ldi r25,hi8(48)
+ 328 00f6 0E94 0000 		call fputc
+  80:wiznetping.c  ****   putchar('m');
+ 330               	.LM29:
+ 331 00fa 6091 0000 		lds r22,__iob+2
+ 332 00fe 7091 0000 		lds r23,(__iob+2)+1
+ 333 0102 8DE6      		ldi r24,lo8(109)
+ 334 0104 90E0      		ldi r25,hi8(109)
+ 335 0106 0E94 0000 		call fputc
+ 336               	/* epilogue: frame size=0 */
+ 337 010a 0895      		ret
+ 338               	/* epilogue end (size=1) */
+ 339               	/* function ansi_me size 33 (32) */
+ 341               	.Lscope5:
+ 343               		.stabd	78,0,0
+ 347               	.global	SPI_Write
+ 349               	SPI_Write:
+ 350               		.stabd	46,0,0
+  81:wiznetping.c  **** }
+  82:wiznetping.c  **** void SPI_Write(unsigned int addr,unsigned char data)
+  83:wiznetping.c  **** {
+ 352               	.LM30:
+ 353               	/* prologue: frame size=0 */
+ 354               	/* prologue end (size=0) */
+ 355 010c 9C01      		movw r18,r24
+  84:wiznetping.c  ****   // Activate the CS pin
+  85:wiznetping.c  ****   SPI_PORT &= ~(1<<SPI_CS);
+ 357               	.LM31:
+ 358 010e 2A98      		cbi 37-0x20,2
+  86:wiznetping.c  ****   // Start Wiznet W5100 Write OpCode transmission
+  87:wiznetping.c  ****   SPDR = WIZNET_WRITE_OPCODE;
+ 360               	.LM32:
+ 361 0110 80EF      		ldi r24,lo8(-16)
+ 362 0112 8EBD      		out 78-0x20,r24
+ 363               	.L28:
+  88:wiznetping.c  ****   // Wait for transmission complete
+  89:wiznetping.c  ****   while(!(SPSR & (1<<SPIF)));
+ 365               	.LM33:
+ 366 0114 0DB4      		in __tmp_reg__,77-0x20
+ 367 0116 07FE      		sbrs __tmp_reg__,7
+ 368 0118 00C0      		rjmp .L28
+  90:wiznetping.c  ****   // Start Wiznet W5100 Address High Bytes transmission
+  91:wiznetping.c  ****   SPDR = (addr & 0xFF00) >> 8;
+ 370               	.LM34:
+ 371 011a 832F      		mov r24,r19
+ 372 011c 9927      		clr r25
+ 373 011e 8EBD      		out 78-0x20,r24
+ 374               	.L30:
+  92:wiznetping.c  ****   // Wait for transmission complete
+  93:wiznetping.c  ****   while(!(SPSR & (1<<SPIF)));
+ 376               	.LM35:
+ 377 0120 0DB4      		in __tmp_reg__,77-0x20
+ 378 0122 07FE      		sbrs __tmp_reg__,7
+ 379 0124 00C0      		rjmp .L30
+  94:wiznetping.c  ****   // Start Wiznet W5100 Address Low Bytes transmission
+  95:wiznetping.c  ****   SPDR = addr & 0x00FF;
+ 381               	.LM36:
+ 382 0126 2EBD      		out 78-0x20,r18
+ 383               	.L32:
+  96:wiznetping.c  ****   // Wait for transmission complete
+  97:wiznetping.c  ****   while(!(SPSR & (1<<SPIF)));   
+ 385               	.LM37:
+ 386 0128 0DB4      		in __tmp_reg__,77-0x20
+ 387 012a 07FE      		sbrs __tmp_reg__,7
+ 388 012c 00C0      		rjmp .L32
+  98:wiznetping.c  **** 
+  99:wiznetping.c  ****   // Start Data transmission
+ 100:wiznetping.c  ****   SPDR = data;
+ 390               	.LM38:
+ 391 012e 6EBD      		out 78-0x20,r22
+ 392               	.L34:
+ 101:wiznetping.c  ****   // Wait for transmission complete
+ 102:wiznetping.c  ****   while(!(SPSR & (1<<SPIF)));
+ 394               	.LM39:
+ 395 0130 0DB4      		in __tmp_reg__,77-0x20
+ 396 0132 07FE      		sbrs __tmp_reg__,7
+ 397 0134 00C0      		rjmp .L34
+ 103:wiznetping.c  ****   // CS pin is not active
+ 104:wiznetping.c  ****   SPI_PORT |= (1<<SPI_CS);
+ 399               	.LM40:
+ 400 0136 2A9A      		sbi 37-0x20,2
+ 401               	/* epilogue: frame size=0 */
+ 402 0138 0895      		ret
+ 403               	/* epilogue end (size=1) */
+ 404               	/* function SPI_Write size 23 (22) */
+ 406               	.Lscope6:
+ 408               		.stabd	78,0,0
+ 411               	.global	SPI_Read
+ 413               	SPI_Read:
+ 414               		.stabd	46,0,0
+ 105:wiznetping.c  **** }
+ 106:wiznetping.c  **** unsigned char SPI_Read(unsigned int addr)
+ 107:wiznetping.c  **** {
+ 416               	.LM41:
+ 417               	/* prologue: frame size=0 */
+ 418               	/* prologue end (size=0) */
+ 419 013a 9C01      		movw r18,r24
+ 108:wiznetping.c  ****   // Activate the CS pin
+ 109:wiznetping.c  ****   SPI_PORT &= ~(1<<SPI_CS);
+ 421               	.LM42:
+ 422 013c 2A98      		cbi 37-0x20,2
+ 110:wiznetping.c  ****   // Start Wiznet W5100 Read OpCode transmission
+ 111:wiznetping.c  ****   SPDR = WIZNET_READ_OPCODE;
+ 424               	.LM43:
+ 425 013e 8FE0      		ldi r24,lo8(15)
+ 426 0140 8EBD      		out 78-0x20,r24
+ 427               	.L46:
+ 112:wiznetping.c  ****   // Wait for transmission complete
+ 113:wiznetping.c  ****   while(!(SPSR & (1<<SPIF)));
+ 429               	.LM44:
+ 430 0142 0DB4      		in __tmp_reg__,77-0x20
+ 431 0144 07FE      		sbrs __tmp_reg__,7
+ 432 0146 00C0      		rjmp .L46
+ 114:wiznetping.c  ****   // Start Wiznet W5100 Address High Bytes transmission
+ 115:wiznetping.c  ****   SPDR = (addr & 0xFF00) >> 8;
+ 434               	.LM45:
+ 435 0148 832F      		mov r24,r19
+ 436 014a 9927      		clr r25
+ 437 014c 8EBD      		out 78-0x20,r24
+ 438               	.L48:
+ 116:wiznetping.c  ****   // Wait for transmission complete
+ 117:wiznetping.c  ****   while(!(SPSR & (1<<SPIF)));
+ 440               	.LM46:
+ 441 014e 0DB4      		in __tmp_reg__,77-0x20
+ 442 0150 07FE      		sbrs __tmp_reg__,7
+ 443 0152 00C0      		rjmp .L48
+ 118:wiznetping.c  ****   // Start Wiznet W5100 Address Low Bytes transmission
+ 119:wiznetping.c  ****   SPDR = addr & 0x00FF;
+ 445               	.LM47:
+ 446 0154 2EBD      		out 78-0x20,r18
+ 447               	.L50:
+ 120:wiznetping.c  ****   // Wait for transmission complete
+ 121:wiznetping.c  ****   while(!(SPSR & (1<<SPIF)));   
+ 449               	.LM48:
+ 450 0156 0DB4      		in __tmp_reg__,77-0x20
+ 451 0158 07FE      		sbrs __tmp_reg__,7
+ 452 015a 00C0      		rjmp .L50
+ 122:wiznetping.c  **** 
+ 123:wiznetping.c  ****   // Send Dummy transmission for reading the data
+ 124:wiznetping.c  ****   SPDR = 0x00;
+ 454               	.LM49:
+ 455 015c 1EBC      		out 78-0x20,__zero_reg__
+ 456               	.L52:
+ 125:wiznetping.c  ****   // Wait for transmission complete
+ 126:wiznetping.c  ****   while(!(SPSR & (1<<SPIF)));  
+ 458               	.LM50:
+ 459 015e 0DB4      		in __tmp_reg__,77-0x20
+ 460 0160 07FE      		sbrs __tmp_reg__,7
+ 461 0162 00C0      		rjmp .L52
+ 127:wiznetping.c  **** 
+ 128:wiznetping.c  ****   // CS pin is not active
+ 129:wiznetping.c  ****   SPI_PORT |= (1<<SPI_CS);
+ 463               	.LM51:
+ 464 0164 2A9A      		sbi 37-0x20,2
+ 130:wiznetping.c  ****   return(SPDR);
+ 466               	.LM52:
+ 467 0166 8EB5      		in r24,78-0x20
+ 131:wiznetping.c  **** }
+ 469               	.LM53:
+ 470 0168 9927      		clr r25
+ 471               	/* epilogue: frame size=0 */
+ 472 016a 0895      		ret
+ 473               	/* epilogue end (size=1) */
+ 474               	/* function SPI_Read size 25 (24) */
+ 476               	.Lscope7:
+ 478               		.stabd	78,0,0
+ 479               		.data
+ 482               	C.0.1584:
+ 483 000e 00        		.byte	0
+ 484 000f 16        		.byte	22
+ 485 0010 36        		.byte	54
+ 486 0011 DE        		.byte	-34
+ 487 0012 58        		.byte	88
+ 488 0013 F6        		.byte	-10
+ 489               	.LC0:
+ 490 0014 5265 6164 		.string	"Reading MR: %d\n\n"
+ 490      696E 6720 
+ 490      4D52 3A20 
+ 490      2564 0A0A 
+ 490      00
+ 491               	.LC1:
+ 492 0025 5365 7474 		.string	"Setting Gateway Address %d.%d.%d.%d\n"
+ 492      696E 6720 
+ 492      4761 7465 
+ 492      7761 7920 
+ 492      4164 6472 
+ 493               	.LC2:
+ 494 004a 5265 6164 		.string	"Reading GAR: %d.%d.%d.%d\n\n"
+ 494      696E 6720 
+ 494      4741 523A 
+ 494      2025 642E 
+ 494      2564 2E25 
+ 495               	.LC3:
+ 496 0065 5365 7474 		.string	"Setting Source Address %.2x:%.2x:%.2x:%.2x:%.2x:%.2x\n"
+ 496      696E 6720 
+ 496      536F 7572 
+ 496      6365 2041 
+ 496      6464 7265 
+ 497               	.LC4:
+ 498 009b 5265 6164 		.string	"Reading SAR: %.2x:%.2x:%.2x:%.2x:%.2x:%.2x\n\n"
+ 498      696E 6720 
+ 498      5341 523A 
+ 498      2025 2E32 
+ 498      783A 252E 
+ 499               	.LC5:
+ 500 00c8 5365 7474 		.string	"Setting Sub Mask Address %d.%d.%d.%d\n"
+ 500      696E 6720 
+ 500      5375 6220 
+ 500      4D61 736B 
+ 500      2041 6464 
+ 501               	.LC6:
+ 502 00ee 5265 6164 		.string	"Reading SUBR: %d.%d.%d.%d\n\n"
+ 502      696E 6720 
+ 502      5355 4252 
+ 502      3A20 2564 
+ 502      2E25 642E 
+ 503               	.LC7:
+ 504 010a 5365 7474 		.string	"Setting IP Address %d.%d.%d.%d\n"
+ 504      696E 6720 
+ 504      4950 2041 
+ 504      6464 7265 
+ 504      7373 2025 
+ 505               	.LC8:
+ 506 012a 5265 6164 		.string	"Reading SIPR: %d.%d.%d.%d\n\n"
+ 506      696E 6720 
+ 506      5349 5052 
+ 506      3A20 2564 
+ 506      2E25 642E 
+ 507               	.LC9:
+ 508 0146 5365 7474 		.string	"Setting Wiznet RMSR and TMSR\n"
+ 508      696E 6720 
+ 508      5769 7A6E 
+ 508      6574 2052 
+ 508      4D53 5220 
+ 509               	.LC10:
+ 510 0164 446F 6E65 		.string	"Done Wiznet W5100 Initialized!"
+ 510      2057 697A 
+ 510      6E65 7420 
+ 510      5735 3130 
+ 510      3020 496E 
+ 511               		.text
+ 513               	.global	W5100_Init
+ 515               	W5100_Init:
+ 516               		.stabd	46,0,0
+ 132:wiznetping.c  **** void W5100_Init(void)
+ 133:wiznetping.c  **** {
+ 518               	.LM54:
+ 519               	/* prologue: frame size=0 */
+ 520 016c 2F92      		push r2
+ 521 016e 3F92      		push r3
+ 522 0170 4F92      		push r4
+ 523 0172 5F92      		push r5
+ 524 0174 6F92      		push r6
+ 525 0176 7F92      		push r7
+ 526 0178 8F92      		push r8
+ 527 017a 9F92      		push r9
+ 528 017c AF92      		push r10
+ 529 017e BF92      		push r11
+ 530 0180 CF92      		push r12
+ 531 0182 DF92      		push r13
+ 532 0184 EF92      		push r14
+ 533 0186 FF92      		push r15
+ 534 0188 0F93      		push r16
+ 535 018a 1F93      		push r17
+ 536 018c CF93      		push r28
+ 537 018e DF93      		push r29
+ 538               	/* prologue end (size=18) */
+ 134:wiznetping.c  ****   // Ethernet Setup
+ 135:wiznetping.c  ****   unsigned char mac_addr[] = {0x00,0x16,0x36,0xDE,0x58,0xF6};
+ 136:wiznetping.c  ****   unsigned char ip_addr[] = {192,168,2,10};
+ 137:wiznetping.c  ****   unsigned char sub_mask[] = {255,255,255,0};
+ 138:wiznetping.c  ****   unsigned char gtw_addr[] = {192,168,2,1};
+ 139:wiznetping.c  ****   // Setting the Wiznet W5100 Mode Register: 0x0000
+ 140:wiznetping.c  ****   SPI_Write(MR,0x80);            // MR = 0b10000000;
+ 540               	.LM55:
+ 541 0190 60E8      		ldi r22,lo8(-128)
+ 542 0192 80E0      		ldi r24,lo8(0)
+ 543 0194 90E0      		ldi r25,hi8(0)
+ 544 0196 0E94 0000 		call SPI_Write
+ 545               	.LBB2:
+ 546               	.LBB3:
+ 547               	.LBB4:
+ 549               	.Ltext1:
+   0:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** /* Copyright (c) 2002, Marek Michalkiewicz
+   1:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****    Copyright (c) 2007 Joerg Wunsch
+   2:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****    All rights reserved.
+   3:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+   4:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****    Redistribution and use in source and binary forms, with or without
+   5:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****    modification, are permitted provided that the following conditions are met:
+   6:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+   7:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****    * Redistributions of source code must retain the above copyright
+   8:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****      notice, this list of conditions and the following disclaimer.
+   9:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  10:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****    * Redistributions in binary form must reproduce the above copyright
+  11:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****      notice, this list of conditions and the following disclaimer in
+  12:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****      the documentation and/or other materials provided with the
+  13:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****      distribution.
+  14:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  15:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****    * Neither the name of the copyright holders nor the names of
+  16:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****      contributors may be used to endorse or promote products derived
+  17:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****      from this software without specific prior written permission.
+  18:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  19:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  20:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  21:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  22:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  23:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  24:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  25:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  26:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  27:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  28:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  29:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****   POSSIBILITY OF SUCH DAMAGE. */
+  30:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  31:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** /* $Id: delay_basic.h 2143 2010-06-08 21:19:51Z joerg_wunsch $ */
+  32:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  33:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** #ifndef _UTIL_DELAY_BASIC_H_
+  34:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** #define _UTIL_DELAY_BASIC_H_ 1
+  35:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  36:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** #include <inttypes.h>
+  37:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  38:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** #if !defined(__DOXYGEN__)
+  39:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** static inline void _delay_loop_1(uint8_t __count) __attribute__((always_inline));
+  40:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** static inline void _delay_loop_2(uint16_t __count) __attribute__((always_inline));
+  41:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** #endif
+  42:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  43:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** /** \file */
+  44:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** /** \defgroup util_delay_basic <util/delay_basic.h>: Basic busy-wait delay loops
+  45:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     \code
+  46:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     #include <util/delay_basic.h>
+  47:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     \endcode
+  48:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  49:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     The functions in this header file implement simple delay loops
+  50:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     that perform a busy-waiting.  They are typically used to
+  51:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     facilitate short delays in the program execution.  They are
+  52:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     implemented as count-down loops with a well-known CPU cycle
+  53:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     count per loop iteration.  As such, no other processing can
+  54:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     occur simultaneously.  It should be kept in mind that the
+  55:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     functions described here do not disable interrupts.
+  56:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  57:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     In general, for long delays, the use of hardware timers is
+  58:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     much preferrable, as they free the CPU, and allow for
+  59:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     concurrent processing of other events while the timer is
+  60:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     running.  However, in particular for very short delays, the
+  61:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     overhead of setting up a hardware timer is too much compared
+  62:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     to the overall delay time.
+  63:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  64:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     Two inline functions are provided for the actual delay algorithms.
+  65:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  66:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** */
+  67:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  68:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** /** \ingroup util_delay_basic
+  69:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  70:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     Delay loop using an 8-bit counter \c __count, so up to 256
+  71:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     iterations are possible.  (The value 256 would have to be passed
+  72:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     as 0.)  The loop executes three CPU cycles per iteration, not
+  73:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     including the overhead the compiler needs to setup the counter
+  74:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     register.
+  75:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  76:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     Thus, at a CPU speed of 1 MHz, delays of up to 768 microseconds
+  77:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     can be achieved.
+  78:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** */
+  79:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** void
+  80:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** _delay_loop_1(uint8_t __count)
+  81:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** {
+  82:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 	__asm__ volatile (
+  83:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 		"1: dec %0" "\n\t"
+  84:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 		"brne 1b"
+  85:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 		: "=r" (__count)
+  86:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 		: "0" (__count)
+  87:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 	);
+  88:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** }
+  89:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  90:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** /** \ingroup util_delay_basic
+  91:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  92:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     Delay loop using a 16-bit counter \c __count, so up to 65536
+  93:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     iterations are possible.  (The value 65536 would have to be
+  94:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     passed as 0.)  The loop executes four CPU cycles per iteration,
+  95:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     not including the overhead the compiler requires to setup the
+  96:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     counter register pair.
+  97:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 
+  98:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     Thus, at a CPU speed of 1 MHz, delays of up to about 262.1
+  99:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****     milliseconds can be achieved.
+ 100:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h ****  */
+ 101:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** void
+ 102:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** _delay_loop_2(uint16_t __count)
+ 103:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** {
+ 104:/opt/local/lib/gcc/avr/4.0.2/../../../../avr/include/util/delay_basic.h **** 	__asm__ volatile (
+ 551               	.LM56:
+ 552 019a 4AEF      		ldi r20,lo8(250)
+ 553 019c 642E      		mov r6,r20
+ 554 019e 712C      		mov r7,__zero_reg__
+ 555 01a0 C301      		movw r24,r6
+ 556               	/* #APP */
+ 557 01a2 0197      		1: sbiw r24,1
+ 558 01a4 01F4      		brne 1b
+ 559               	/* #NOAPP */
+ 560               	.LBE4:
+ 561               	.LBE3:
+ 562               	.LBE2:
+ 564               	.Ltext2:
+ 141:wiznetping.c  ****   _delay_ms(1);
+ 142:wiznetping.c  ****   printf("Reading MR: %d\n\n",SPI_Read(MR));
+ 566               	.LM57:
+ 567 01a6 80E0      		ldi r24,lo8(0)
+ 568 01a8 90E0      		ldi r25,hi8(0)
+ 569 01aa 0E94 0000 		call SPI_Read
+ 570 01ae 9927      		clr r25
+ 571 01b0 9F93      		push r25
+ 572 01b2 8F93      		push r24
+ 573 01b4 80E0      		ldi r24,lo8(.LC0)
+ 574 01b6 90E0      		ldi r25,hi8(.LC0)
+ 575 01b8 9F93      		push r25
+ 576 01ba 8F93      		push r24
+ 577 01bc 0E94 0000 		call printf
+ 143:wiznetping.c  ****   // Setting the Wiznet W5100 Gateway Address (GAR): 0x0001 to 0x0004
+ 144:wiznetping.c  ****   printf("Setting Gateway Address %d.%d.%d.%d\n",gtw_addr[0],gtw_addr[1],\
+ 579               	.LM58:
+ 580 01c0 81E0      		ldi r24,lo8(1)
+ 581 01c2 90E0      		ldi r25,hi8(1)
+ 582 01c4 9F93      		push r25
+ 583 01c6 8F93      		push r24
+ 584 01c8 C2E0      		ldi r28,lo8(2)
+ 585 01ca D0E0      		ldi r29,hi8(2)
+ 586 01cc DF93      		push r29
+ 587 01ce CF93      		push r28
+ 588 01d0 38EA      		ldi r19,lo8(168)
+ 589 01d2 232E      		mov r2,r19
+ 590 01d4 312C      		mov r3,__zero_reg__
+ 591 01d6 3F92      		push r3
+ 592 01d8 2F92      		push r2
+ 593 01da 20EC      		ldi r18,lo8(192)
+ 594 01dc 422E      		mov r4,r18
+ 595 01de 512C      		mov r5,__zero_reg__
+ 596 01e0 5F92      		push r5
+ 597 01e2 4F92      		push r4
+ 598 01e4 80E0      		ldi r24,lo8(.LC1)
+ 599 01e6 90E0      		ldi r25,hi8(.LC1)
+ 600 01e8 9F93      		push r25
+ 601 01ea 8F93      		push r24
+ 602 01ec 0E94 0000 		call printf
+ 145:wiznetping.c  ****           gtw_addr[2],gtw_addr[3]);
+ 146:wiznetping.c  ****   SPI_Write(GAR + 0,gtw_addr[0]);
+ 604               	.LM59:
+ 605 01f0 60EC      		ldi r22,lo8(-64)
+ 606 01f2 81E0      		ldi r24,lo8(1)
+ 607 01f4 90E0      		ldi r25,hi8(1)
+ 608 01f6 0E94 0000 		call SPI_Write
+ 147:wiznetping.c  ****   SPI_Write(GAR + 1,gtw_addr[1]);
+ 610               	.LM60:
+ 611 01fa 68EA      		ldi r22,lo8(-88)
+ 612 01fc 82E0      		ldi r24,lo8(2)
+ 613 01fe 90E0      		ldi r25,hi8(2)
+ 614 0200 0E94 0000 		call SPI_Write
+ 148:wiznetping.c  ****   SPI_Write(GAR + 2,gtw_addr[2]);
+ 616               	.LM61:
+ 617 0204 62E0      		ldi r22,lo8(2)
+ 618 0206 83E0      		ldi r24,lo8(3)
+ 619 0208 90E0      		ldi r25,hi8(3)
+ 620 020a 0E94 0000 		call SPI_Write
+ 149:wiznetping.c  ****   SPI_Write(GAR + 3,gtw_addr[3]);
+ 622               	.LM62:
+ 623 020e 61E0      		ldi r22,lo8(1)
+ 624 0210 84E0      		ldi r24,lo8(4)
+ 625 0212 90E0      		ldi r25,hi8(4)
+ 626 0214 0E94 0000 		call SPI_Write
+ 627               	.LBB5:
+ 628               	.LBB6:
+ 629               	.LBB7:
+ 631               	.Ltext3:
+ 633               	.LM63:
+ 634 0218 C301      		movw r24,r6
+ 635               	/* #APP */
+ 636 021a 0197      		1: sbiw r24,1
+ 637 021c 01F4      		brne 1b
+ 638               	/* #NOAPP */
+ 639               	.LBE7:
+ 640               	.LBE6:
+ 641               	.LBE5:
+ 643               	.Ltext4:
+ 150:wiznetping.c  ****   _delay_ms(1);
+ 151:wiznetping.c  ****   printf("Reading GAR: %d.%d.%d.%d\n\n",SPI_Read(GAR + 0),SPI_Read(GAR + 1),\
+ 645               	.LM64:
+ 646 021e 84E0      		ldi r24,lo8(4)
+ 647 0220 90E0      		ldi r25,hi8(4)
+ 648 0222 0E94 0000 		call SPI_Read
+ 649 0226 C82E      		mov r12,r24
+ 650 0228 83E0      		ldi r24,lo8(3)
+ 651 022a 90E0      		ldi r25,hi8(3)
+ 652 022c 0E94 0000 		call SPI_Read
+ 653 0230 E82E      		mov r14,r24
+ 654 0232 82E0      		ldi r24,lo8(2)
+ 655 0234 90E0      		ldi r25,hi8(2)
+ 656 0236 0E94 0000 		call SPI_Read
+ 657 023a 082F      		mov r16,r24
+ 658 023c 81E0      		ldi r24,lo8(1)
+ 659 023e 90E0      		ldi r25,hi8(1)
+ 660 0240 0E94 0000 		call SPI_Read
+ 661 0244 DD24      		clr r13
+ 662 0246 DF92      		push r13
+ 663 0248 CF92      		push r12
+ 664 024a FF24      		clr r15
+ 665 024c FF92      		push r15
+ 666 024e EF92      		push r14
+ 667 0250 1127      		clr r17
+ 668 0252 1F93      		push r17
+ 669 0254 0F93      		push r16
+ 670 0256 9927      		clr r25
+ 671 0258 9F93      		push r25
+ 672 025a 8F93      		push r24
+ 673 025c 80E0      		ldi r24,lo8(.LC2)
+ 674 025e 90E0      		ldi r25,hi8(.LC2)
+ 675 0260 9F93      		push r25
+ 676 0262 8F93      		push r24
+ 677 0264 0E94 0000 		call printf
+ 152:wiznetping.c  ****           SPI_Read(GAR + 2),SPI_Read(GAR + 3));
+ 153:wiznetping.c  ****   // Setting the Wiznet W5100 Source Address Register (SAR): 0x0009 to 0x000E
+ 154:wiznetping.c  ****   printf("Setting Source Address %.2x:%.2x:%.2x:%.2x:%.2x:%.2x\n",mac_addr[0],mac_addr[1],\
+ 679               	.LM65:
+ 680 0268 86EF      		ldi r24,lo8(246)
+ 681 026a 90E0      		ldi r25,hi8(246)
+ 682 026c 9F93      		push r25
+ 683 026e 8F93      		push r24
+ 684 0270 88E5      		ldi r24,lo8(88)
+ 685 0272 90E0      		ldi r25,hi8(88)
+ 686 0274 9F93      		push r25
+ 687 0276 8F93      		push r24
+ 688 0278 8EED      		ldi r24,lo8(222)
+ 689 027a 90E0      		ldi r25,hi8(222)
+ 690 027c 9F93      		push r25
+ 691 027e 8F93      		push r24
+ 692 0280 86E3      		ldi r24,lo8(54)
+ 693 0282 90E0      		ldi r25,hi8(54)
+ 694 0284 9F93      		push r25
+ 695 0286 8F93      		push r24
+ 696 0288 86E1      		ldi r24,lo8(22)
+ 697 028a 90E0      		ldi r25,hi8(22)
+ 698 028c 9F93      		push r25
+ 699 028e 8F93      		push r24
+ 700 0290 1F92      		push __zero_reg__
+ 701 0292 1F92      		push __zero_reg__
+ 702 0294 80E0      		ldi r24,lo8(.LC3)
+ 703 0296 90E0      		ldi r25,hi8(.LC3)
+ 704 0298 9F93      		push r25
+ 705 029a 8F93      		push r24
+ 706 029c 0E94 0000 		call printf
+ 155:wiznetping.c  ****           mac_addr[2],mac_addr[3],mac_addr[4],mac_addr[5]);
+ 156:wiznetping.c  ****   SPI_Write(SAR + 0,mac_addr[0]);
+ 708               	.LM66:
+ 709 02a0 8DB7      		in r24,__SP_L__
+ 710 02a2 9EB7      		in r25,__SP_H__
+ 711 02a4 8696      		adiw r24,38
+ 712 02a6 0FB6      		in __tmp_reg__,__SREG__
+ 713 02a8 F894      		cli
+ 714 02aa 9EBF      		out __SP_H__,r25
+ 715 02ac 0FBE      		out __SREG__,__tmp_reg__
+ 716 02ae 8DBF      		out __SP_L__,r24
+ 717 02b0 60E0      		ldi r22,lo8(0)
+ 718 02b2 89E0      		ldi r24,lo8(9)
+ 719 02b4 90E0      		ldi r25,hi8(9)
+ 720 02b6 0E94 0000 		call SPI_Write
+ 157:wiznetping.c  ****   SPI_Write(SAR + 1,mac_addr[1]);
+ 722               	.LM67:
+ 723 02ba 66E1      		ldi r22,lo8(22)
+ 724 02bc 8AE0      		ldi r24,lo8(10)
+ 725 02be 90E0      		ldi r25,hi8(10)
+ 726 02c0 0E94 0000 		call SPI_Write
+ 158:wiznetping.c  ****   SPI_Write(SAR + 2,mac_addr[2]);
+ 728               	.LM68:
+ 729 02c4 66E3      		ldi r22,lo8(54)
+ 730 02c6 8BE0      		ldi r24,lo8(11)
+ 731 02c8 90E0      		ldi r25,hi8(11)
+ 732 02ca 0E94 0000 		call SPI_Write
+ 159:wiznetping.c  ****   SPI_Write(SAR + 3,mac_addr[3]);
+ 734               	.LM69:
+ 735 02ce 6EED      		ldi r22,lo8(-34)
+ 736 02d0 8CE0      		ldi r24,lo8(12)
+ 737 02d2 90E0      		ldi r25,hi8(12)
+ 738 02d4 0E94 0000 		call SPI_Write
+ 160:wiznetping.c  ****   SPI_Write(SAR + 4,mac_addr[4]);
+ 740               	.LM70:
+ 741 02d8 68E5      		ldi r22,lo8(88)
+ 742 02da 8DE0      		ldi r24,lo8(13)
+ 743 02dc 90E0      		ldi r25,hi8(13)
+ 744 02de 0E94 0000 		call SPI_Write
+ 161:wiznetping.c  ****   SPI_Write(SAR + 5,mac_addr[5]);
+ 746               	.LM71:
+ 747 02e2 66EF      		ldi r22,lo8(-10)
+ 748 02e4 8EE0      		ldi r24,lo8(14)
+ 749 02e6 90E0      		ldi r25,hi8(14)
+ 750 02e8 0E94 0000 		call SPI_Write
+ 751               	.LBB8:
+ 752               	.LBB9:
+ 753               	.LBB10:
+ 755               	.Ltext5:
+ 757               	.LM72:
+ 758 02ec C301      		movw r24,r6
+ 759               	/* #APP */
+ 760 02ee 0197      		1: sbiw r24,1
+ 761 02f0 01F4      		brne 1b
+ 762               	/* #NOAPP */
+ 763               	.LBE10:
+ 764               	.LBE9:
+ 765               	.LBE8:
+ 767               	.Ltext6:
+ 162:wiznetping.c  ****   _delay_ms(1);
+ 163:wiznetping.c  ****   printf("Reading SAR: %.2x:%.2x:%.2x:%.2x:%.2x:%.2x\n\n",SPI_Read(SAR + 0),SPI_Read(SAR + 1),\
+ 769               	.LM73:
+ 770 02f2 8EE0      		ldi r24,lo8(14)
+ 771 02f4 90E0      		ldi r25,hi8(14)
+ 772 02f6 0E94 0000 		call SPI_Read
+ 773 02fa 882E      		mov r8,r24
+ 774 02fc 8DE0      		ldi r24,lo8(13)
+ 775 02fe 90E0      		ldi r25,hi8(13)
+ 776 0300 0E94 0000 		call SPI_Read
+ 777 0304 A82E      		mov r10,r24
+ 778 0306 8CE0      		ldi r24,lo8(12)
+ 779 0308 90E0      		ldi r25,hi8(12)
+ 780 030a 0E94 0000 		call SPI_Read
+ 781 030e C82E      		mov r12,r24
+ 782 0310 8BE0      		ldi r24,lo8(11)
+ 783 0312 90E0      		ldi r25,hi8(11)
+ 784 0314 0E94 0000 		call SPI_Read
+ 785 0318 E82E      		mov r14,r24
+ 786 031a 8AE0      		ldi r24,lo8(10)
+ 787 031c 90E0      		ldi r25,hi8(10)
+ 788 031e 0E94 0000 		call SPI_Read
+ 789 0322 082F      		mov r16,r24
+ 790 0324 89E0      		ldi r24,lo8(9)
+ 791 0326 90E0      		ldi r25,hi8(9)
+ 792 0328 0E94 0000 		call SPI_Read
+ 793 032c 9924      		clr r9
+ 794 032e 9F92      		push r9
+ 795 0330 8F92      		push r8
+ 796 0332 BB24      		clr r11
+ 797 0334 BF92      		push r11
+ 798 0336 AF92      		push r10
+ 799 0338 DD24      		clr r13
+ 800 033a DF92      		push r13
+ 801 033c CF92      		push r12
+ 802 033e FF24      		clr r15
+ 803 0340 FF92      		push r15
+ 804 0342 EF92      		push r14
+ 805 0344 1127      		clr r17
+ 806 0346 1F93      		push r17
+ 807 0348 0F93      		push r16
+ 808 034a 9927      		clr r25
+ 809 034c 9F93      		push r25
+ 810 034e 8F93      		push r24
+ 811 0350 80E0      		ldi r24,lo8(.LC4)
+ 812 0352 90E0      		ldi r25,hi8(.LC4)
+ 813 0354 9F93      		push r25
+ 814 0356 8F93      		push r24
+ 815 0358 0E94 0000 		call printf
+ 164:wiznetping.c  ****           SPI_Read(SAR + 2),SPI_Read(SAR + 3),SPI_Read(SAR + 4),SPI_Read(SAR + 5));
+ 165:wiznetping.c  ****   // Setting the Wiznet W5100 Sub Mask Address (SUBR): 0x0005 to 0x0008
+ 166:wiznetping.c  ****   printf("Setting Sub Mask Address %d.%d.%d.%d\n",sub_mask[0],sub_mask[1],\
+ 817               	.LM74:
+ 818 035c 1F92      		push __zero_reg__
+ 819 035e 1F92      		push __zero_reg__
+ 820 0360 8FEF      		ldi r24,lo8(255)
+ 821 0362 90E0      		ldi r25,hi8(255)
+ 822 0364 9F93      		push r25
+ 823 0366 8F93      		push r24
+ 824 0368 9F93      		push r25
+ 825 036a 8F93      		push r24
+ 826 036c 9F93      		push r25
+ 827 036e 8F93      		push r24
+ 828 0370 80E0      		ldi r24,lo8(.LC5)
+ 829 0372 90E0      		ldi r25,hi8(.LC5)
+ 830 0374 9F93      		push r25
+ 831 0376 8F93      		push r24
+ 832 0378 0E94 0000 		call printf
+ 167:wiznetping.c  ****           sub_mask[2],sub_mask[3]);
+ 168:wiznetping.c  ****   SPI_Write(SUBR + 0,sub_mask[0]);
+ 834               	.LM75:
+ 835 037c 6FEF      		ldi r22,lo8(-1)
+ 836 037e 85E0      		ldi r24,lo8(5)
+ 837 0380 90E0      		ldi r25,hi8(5)
+ 838 0382 0E94 0000 		call SPI_Write
+ 169:wiznetping.c  ****   SPI_Write(SUBR + 1,sub_mask[1]);
+ 840               	.LM76:
+ 841 0386 6FEF      		ldi r22,lo8(-1)
+ 842 0388 86E0      		ldi r24,lo8(6)
+ 843 038a 90E0      		ldi r25,hi8(6)
+ 844 038c 0E94 0000 		call SPI_Write
+ 170:wiznetping.c  ****   SPI_Write(SUBR + 2,sub_mask[2]);
+ 846               	.LM77:
+ 847 0390 6FEF      		ldi r22,lo8(-1)
+ 848 0392 87E0      		ldi r24,lo8(7)
+ 849 0394 90E0      		ldi r25,hi8(7)
+ 850 0396 0E94 0000 		call SPI_Write
+ 171:wiznetping.c  ****   SPI_Write(SUBR + 3,sub_mask[3]);
+ 852               	.LM78:
+ 853 039a 60E0      		ldi r22,lo8(0)
+ 854 039c 88E0      		ldi r24,lo8(8)
+ 855 039e 90E0      		ldi r25,hi8(8)
+ 856 03a0 0E94 0000 		call SPI_Write
+ 857               	.LBB11:
+ 858               	.LBB12:
+ 859               	.LBB13:
+ 861               	.Ltext7:
+ 863               	.LM79:
+ 864 03a4 C301      		movw r24,r6
+ 865               	/* #APP */
+ 866 03a6 0197      		1: sbiw r24,1
+ 867 03a8 01F4      		brne 1b
+ 868               	/* #NOAPP */
+ 869               	.LBE13:
+ 870               	.LBE12:
+ 871               	.LBE11:
+ 873               	.Ltext8:
+ 172:wiznetping.c  ****   _delay_ms(1);
+ 173:wiznetping.c  ****   printf("Reading SUBR: %d.%d.%d.%d\n\n",SPI_Read(SUBR + 0),SPI_Read(SUBR + 1),\
+ 875               	.LM80:
+ 876 03aa 88E0      		ldi r24,lo8(8)
+ 877 03ac 90E0      		ldi r25,hi8(8)
+ 878 03ae 0E94 0000 		call SPI_Read
+ 879 03b2 C82E      		mov r12,r24
+ 880 03b4 87E0      		ldi r24,lo8(7)
+ 881 03b6 90E0      		ldi r25,hi8(7)
+ 882 03b8 0E94 0000 		call SPI_Read
+ 883 03bc E82E      		mov r14,r24
+ 884 03be 86E0      		ldi r24,lo8(6)
+ 885 03c0 90E0      		ldi r25,hi8(6)
+ 886 03c2 0E94 0000 		call SPI_Read
+ 887 03c6 082F      		mov r16,r24
+ 888 03c8 85E0      		ldi r24,lo8(5)
+ 889 03ca 90E0      		ldi r25,hi8(5)
+ 890 03cc 0E94 0000 		call SPI_Read
+ 891 03d0 DD24      		clr r13
+ 892 03d2 DF92      		push r13
+ 893 03d4 CF92      		push r12
+ 894 03d6 FF24      		clr r15
+ 895 03d8 FF92      		push r15
+ 896 03da EF92      		push r14
+ 897 03dc 1127      		clr r17
+ 898 03de 1F93      		push r17
+ 899 03e0 0F93      		push r16
+ 900 03e2 9927      		clr r25
+ 901 03e4 9F93      		push r25
+ 902 03e6 8F93      		push r24
+ 903 03e8 80E0      		ldi r24,lo8(.LC6)
+ 904 03ea 90E0      		ldi r25,hi8(.LC6)
+ 905 03ec 9F93      		push r25
+ 906 03ee 8F93      		push r24
+ 907 03f0 0E94 0000 		call printf
+ 174:wiznetping.c  ****           SPI_Read(SUBR + 2),SPI_Read(SUBR + 3));
+ 175:wiznetping.c  ****   // Setting the Wiznet W5100 IP Address (SIPR): 0x000F to 0x0012
+ 176:wiznetping.c  ****   printf("Setting IP Address %d.%d.%d.%d\n",ip_addr[0],ip_addr[1],\
+ 909               	.LM81:
+ 910 03f4 8DB7      		in r24,__SP_L__
+ 911 03f6 9EB7      		in r25,__SP_H__
+ 912 03f8 8296      		adiw r24,34
+ 913 03fa 0FB6      		in __tmp_reg__,__SREG__
+ 914 03fc F894      		cli
+ 915 03fe 9EBF      		out __SP_H__,r25
+ 916 0400 0FBE      		out __SREG__,__tmp_reg__
+ 917 0402 8DBF      		out __SP_L__,r24
+ 918 0404 8AE0      		ldi r24,lo8(10)
+ 919 0406 90E0      		ldi r25,hi8(10)
+ 920 0408 9F93      		push r25
+ 921 040a 8F93      		push r24
+ 922 040c DF93      		push r29
+ 923 040e CF93      		push r28
+ 924 0410 3F92      		push r3
+ 925 0412 2F92      		push r2
+ 926 0414 5F92      		push r5
+ 927 0416 4F92      		push r4
+ 928 0418 80E0      		ldi r24,lo8(.LC7)
+ 929 041a 90E0      		ldi r25,hi8(.LC7)
+ 930 041c 9F93      		push r25
+ 931 041e 8F93      		push r24
+ 932 0420 0E94 0000 		call printf
+ 177:wiznetping.c  ****           ip_addr[2],ip_addr[3]);
+ 178:wiznetping.c  ****   SPI_Write(SIPR + 0,ip_addr[0]);
+ 934               	.LM82:
+ 935 0424 60EC      		ldi r22,lo8(-64)
+ 936 0426 8FE0      		ldi r24,lo8(15)
+ 937 0428 90E0      		ldi r25,hi8(15)
+ 938 042a 0E94 0000 		call SPI_Write
+ 179:wiznetping.c  ****   SPI_Write(SIPR + 1,ip_addr[1]);
+ 940               	.LM83:
+ 941 042e 68EA      		ldi r22,lo8(-88)
+ 942 0430 80E1      		ldi r24,lo8(16)
+ 943 0432 90E0      		ldi r25,hi8(16)
+ 944 0434 0E94 0000 		call SPI_Write
+ 180:wiznetping.c  ****   SPI_Write(SIPR + 2,ip_addr[2]);
+ 946               	.LM84:
+ 947 0438 62E0      		ldi r22,lo8(2)
+ 948 043a 81E1      		ldi r24,lo8(17)
+ 949 043c 90E0      		ldi r25,hi8(17)
+ 950 043e 0E94 0000 		call SPI_Write
+ 181:wiznetping.c  ****   SPI_Write(SIPR + 3,ip_addr[3]);
+ 952               	.LM85:
+ 953 0442 6AE0      		ldi r22,lo8(10)
+ 954 0444 82E1      		ldi r24,lo8(18)
+ 955 0446 90E0      		ldi r25,hi8(18)
+ 956 0448 0E94 0000 		call SPI_Write
+ 957               	.LBB14:
+ 958               	.LBB15:
+ 959               	.LBB16:
+ 961               	.Ltext9:
+ 963               	.LM86:
+ 964 044c C301      		movw r24,r6
+ 965               	/* #APP */
+ 966 044e 0197      		1: sbiw r24,1
+ 967 0450 01F4      		brne 1b
+ 968               	/* #NOAPP */
+ 969               	.LBE16:
+ 970               	.LBE15:
+ 971               	.LBE14:
+ 973               	.Ltext10:
+ 182:wiznetping.c  ****   _delay_ms(1);
+ 183:wiznetping.c  ****   printf("Reading SIPR: %d.%d.%d.%d\n\n",SPI_Read(SIPR + 0),SPI_Read(SIPR + 1),\
+ 975               	.LM87:
+ 976 0452 82E1      		ldi r24,lo8(18)
+ 977 0454 90E0      		ldi r25,hi8(18)
+ 978 0456 0E94 0000 		call SPI_Read
+ 979 045a C82E      		mov r12,r24
+ 980 045c 81E1      		ldi r24,lo8(17)
+ 981 045e 90E0      		ldi r25,hi8(17)
+ 982 0460 0E94 0000 		call SPI_Read
+ 983 0464 E82E      		mov r14,r24
+ 984 0466 80E1      		ldi r24,lo8(16)
+ 985 0468 90E0      		ldi r25,hi8(16)
+ 986 046a 0E94 0000 		call SPI_Read
+ 987 046e 082F      		mov r16,r24
+ 988 0470 8FE0      		ldi r24,lo8(15)
+ 989 0472 90E0      		ldi r25,hi8(15)
+ 990 0474 0E94 0000 		call SPI_Read
+ 991 0478 DD24      		clr r13
+ 992 047a DF92      		push r13
+ 993 047c CF92      		push r12
+ 994 047e FF24      		clr r15
+ 995 0480 FF92      		push r15
+ 996 0482 EF92      		push r14
+ 997 0484 1127      		clr r17
+ 998 0486 1F93      		push r17
+ 999 0488 0F93      		push r16
+ 1000 048a 9927      		clr r25
+ 1001 048c 9F93      		push r25
+ 1002 048e 8F93      		push r24
+ 1003 0490 80E0      		ldi r24,lo8(.LC8)
+ 1004 0492 90E0      		ldi r25,hi8(.LC8)
+ 1005 0494 9F93      		push r25
+ 1006 0496 8F93      		push r24
+ 1007 0498 0E94 0000 		call printf
+ 184:wiznetping.c  ****           SPI_Read(SIPR + 2),SPI_Read(SIPR + 3));
+ 185:wiznetping.c  **** 
+ 186:wiznetping.c  ****   // Setting the Wiznet W5100 RX and TX Memory Size, we use 2KB for Rx/Tx 4 channels
+ 187:wiznetping.c  ****   printf("Setting Wiznet RMSR and TMSR\n\n");
+ 1009               	.LM88:
+ 1010 049c 80E0      		ldi r24,lo8(.LC9)
+ 1011 049e 90E0      		ldi r25,hi8(.LC9)
+ 1012 04a0 0E94 0000 		call puts
+ 188:wiznetping.c  ****   SPI_Write(RMSR,0x55);
+ 1014               	.LM89:
+ 1015 04a4 65E5      		ldi r22,lo8(85)
+ 1016 04a6 8AE1      		ldi r24,lo8(26)
+ 1017 04a8 90E0      		ldi r25,hi8(26)
+ 1018 04aa 0E94 0000 		call SPI_Write
+ 189:wiznetping.c  ****   SPI_Write(TMSR,0x55);
+ 1020               	.LM90:
+ 1021 04ae 65E5      		ldi r22,lo8(85)
+ 1022 04b0 8BE1      		ldi r24,lo8(27)
+ 1023 04b2 90E0      		ldi r25,hi8(27)
+ 1024 04b4 0E94 0000 		call SPI_Write
+ 190:wiznetping.c  ****   printf("Done Wiznet W5100 Initialized!\n");
+ 1026               	.LM91:
+ 1027 04b8 80E0      		ldi r24,lo8(.LC10)
+ 1028 04ba 90E0      		ldi r25,hi8(.LC10)
+ 1029 04bc 0E94 0000 		call puts
+ 1030 04c0 8DB7      		in r24,__SP_L__
+ 1031 04c2 9EB7      		in r25,__SP_H__
+ 1032 04c4 4496      		adiw r24,20
+ 1033 04c6 0FB6      		in __tmp_reg__,__SREG__
+ 1034 04c8 F894      		cli
+ 1035 04ca 9EBF      		out __SP_H__,r25
+ 1036 04cc 0FBE      		out __SREG__,__tmp_reg__
+ 1037 04ce 8DBF      		out __SP_L__,r24
+ 1038               	/* epilogue: frame size=0 */
+ 1039 04d0 DF91      		pop r29
+ 1040 04d2 CF91      		pop r28
+ 1041 04d4 1F91      		pop r17
+ 1042 04d6 0F91      		pop r16
+ 1043 04d8 FF90      		pop r15
+ 1044 04da EF90      		pop r14
+ 1045 04dc DF90      		pop r13
+ 1046 04de CF90      		pop r12
+ 1047 04e0 BF90      		pop r11
+ 1048 04e2 AF90      		pop r10
+ 1049 04e4 9F90      		pop r9
+ 1050 04e6 8F90      		pop r8
+ 1051 04e8 7F90      		pop r7
+ 1052 04ea 6F90      		pop r6
+ 1053 04ec 5F90      		pop r5
+ 1054 04ee 4F90      		pop r4
+ 1055 04f0 3F90      		pop r3
+ 1056 04f2 2F90      		pop r2
+ 1057 04f4 0895      		ret
+ 1058               	/* epilogue end (size=19) */
+ 1059               	/* function W5100_Init size 463 (426) */
+ 1076               	.Lscope8:
+ 1078               		.stabd	78,0,0
+ 1079               		.data
+ 1080               	.LC11:
+ 1081 0183 5769 7A6E 		.string	"Wiznet W5100 Init\n"
+ 1081      6574 2057 
+ 1081      3531 3030 
+ 1081      2049 6E69 
+ 1081      740A 00
+ 1082               		.text
+ 1084               	.global	main
+ 1086               	main:
+ 1087               		.stabd	46,0,0
+ 191:wiznetping.c  **** }
+ 192:wiznetping.c  **** // Assign I/O stream to UART
+ 193:wiznetping.c  **** FILE uart_str = FDEV_SETUP_STREAM(uart_putch, uart_getch, _FDEV_SETUP_RW);
+ 194:wiznetping.c  **** int main(void){
+ 1089               	.LM92:
+ 1090               	/* prologue: frame size=0 */
+ 1091 04f6 C0E0      		ldi r28,lo8(__stack - 0)
+ 1092 04f8 D0E0      		ldi r29,hi8(__stack - 0)
+ 1093 04fa DEBF      		out __SP_H__,r29
+ 1094 04fc CDBF      		out __SP_L__,r28
+ 1095               	/* prologue end (size=4) */
+ 195:wiznetping.c  ****   // Set the PORTD as Output:
+ 196:wiznetping.c  ****   DDRD=0xFF;
+ 1097               	.LM93:
+ 1098 04fe 8FEF      		ldi r24,lo8(-1)
+ 1099 0500 8AB9      		out 42-0x20,r24
+ 197:wiznetping.c  ****   PORTD=0x00;
+ 1101               	.LM94:
+ 1102 0502 1BB8      		out 43-0x20,__zero_reg__
+ 198:wiznetping.c  ****    // Define Output/Input Stream
+ 199:wiznetping.c  ****   stdout = stdin = &uart_str;
+ 1104               	.LM95:
+ 1105 0504 80E0      		ldi r24,lo8(uart_str)
+ 1106 0506 90E0      		ldi r25,hi8(uart_str)
+ 1107 0508 9093 0000 		sts (__iob)+1,r25
+ 1108 050c 8093 0000 		sts __iob,r24
+ 1109 0510 9093 0000 		sts (__iob+2)+1,r25
+ 1110 0514 8093 0000 		sts __iob+2,r24
+ 1111               	.LBB17:
+ 1112               	.LBB18:
+  36:wiznetping.c  ****   UBRR0H = (((F_CPU/BAUD_RATE)/16)-1)>>8;	// set baud rate
+ 1114               	.LM96:
+ 1115 0518 1092 C500 		sts 197,__zero_reg__
+  37:wiznetping.c  ****   UBRR0L = (((F_CPU/BAUD_RATE)/16)-1);
+ 1117               	.LM97:
+ 1118 051c 82E0      		ldi r24,lo8(2)
+ 1119 051e 8093 C400 		sts 196,r24
+  38:wiznetping.c  ****   UCSR0B = (1<<RXEN0)|(1<<TXEN0); 		// enable Rx & Tx
+ 1121               	.LM98:
+ 1122 0522 88E1      		ldi r24,lo8(24)
+ 1123 0524 8093 C100 		sts 193,r24
+  39:wiznetping.c  ****   UCSR0C=  (1<<UCSZ01)|(1<<UCSZ00);  	       // config USART; 8N1
+ 1125               	.LM99:
+ 1126 0528 86E0      		ldi r24,lo8(6)
+ 1127 052a 8093 C200 		sts 194,r24
+ 1128               	.LBE18:
+ 1129               	.LBE17:
+ 200:wiznetping.c  ****   // Initial UART Peripheral
+ 201:wiznetping.c  ****   uart_init();
+ 202:wiznetping.c  ****   // Clear Screen
+ 203:wiznetping.c  ****   ansi_me();
+ 1131               	.LM100:
+ 1132 052e 0E94 0000 		call ansi_me
+ 204:wiznetping.c  ****   ansi_cl();
+ 1134               	.LM101:
+ 1135 0532 0E94 0000 		call ansi_cl
+ 205:wiznetping.c  ****   ansi_me();
+ 1137               	.LM102:
+ 1138 0536 0E94 0000 		call ansi_me
+ 206:wiznetping.c  ****   ansi_cl();
+ 1140               	.LM103:
+ 1141 053a 0E94 0000 		call ansi_cl
+ 1142 053e 00C0      		rjmp .L66
+ 1143               	.L67:
+ 1144               	.LBB19:
+ 1145               	.LBB20:
+  44:wiznetping.c  ****   while (UCSR0A & (1<<RXC0)) dummy = UDR0;
+ 1147               	.LM104:
+ 1148 0540 8091 C600 		lds r24,198
+ 1149               	.L66:
+ 1150 0544 8091 C000 		lds r24,192
+ 1151 0548 87FD      		sbrc r24,7
+ 1152 054a 00C0      		rjmp .L67
+ 1153               	.LBE20:
+ 1154               	.LBE19:
+ 207:wiznetping.c  ****   uart_flush();
+ 208:wiznetping.c  ****   // Initial the AVR ATMega168/328 SPI Peripheral
+ 209:wiznetping.c  ****   // Set MOSI (PORTB3),SCK (PORTB5) and PORTB2 (SS) as output, others as input
+ 210:wiznetping.c  ****   SPI_DDR = (1<<PORTB3)|(1<<PORTB5)|(1<<PORTB2);
+ 1156               	.LM105:
+ 1157 054c 8CE2      		ldi r24,lo8(44)
+ 1158 054e 84B9      		out 36-0x20,r24
+ 211:wiznetping.c  ****   // CS pin is not active
+ 212:wiznetping.c  ****   SPI_PORT |= (1<<SPI_CS);
+ 1160               	.LM106:
+ 1161 0550 2A9A      		sbi 37-0x20,2
+ 213:wiznetping.c  ****   // Enable SPI, Master Mode 0, set the clock rate fck/2
+ 214:wiznetping.c  ****   SPCR = (1<<SPE)|(1<<MSTR);
+ 1163               	.LM107:
+ 1164 0552 80E5      		ldi r24,lo8(80)
+ 1165 0554 8CBD      		out 76-0x20,r24
+ 215:wiznetping.c  ****   SPSR |= (1<<SPI2X);
+ 1167               	.LM108:
+ 1168 0556 8DB5      		in r24,77-0x20
+ 1169 0558 8160      		ori r24,lo8(1)
+ 1170 055a 8DBD      		out 77-0x20,r24
+ 216:wiznetping.c  ****   // Initial the Wiznet W5100
+ 217:wiznetping.c  ****   printf("Wiznet W5100 Init\n\n");
+ 1172               	.LM109:
+ 1173 055c 80E0      		ldi r24,lo8(.LC11)
+ 1174 055e 90E0      		ldi r25,hi8(.LC11)
+ 1175 0560 0E94 0000 		call puts
+ 218:wiznetping.c  ****   W5100_Init();
+ 1177               	.LM110:
+ 1178 0564 0E94 0000 		call W5100_Init
+ 1179               	.L69:
+ 1180 0568 00C0      		rjmp .L69
+ 1181               	/* epilogue: frame size=0 */
+ 1182               	/* epilogue: noreturn */
+ 1183               	/* epilogue end (size=0) */
+ 1184               	/* function main size 58 (54) */
+ 1186               	.Lscope9:
+ 1188               		.stabd	78,0,0
+ 1191               	.Letext0:
+ 1192               	/* File "wiznetping.c": code  703 = 0x02bf ( 650), prologues  24, epilogues  29 */
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 wiznetping.c
+/var/folders/ek/ekeCha+GHRG6c1igLEjgNU+++TI/-Tmp-//ccI3TpR4.s:3      *ABS*:000000000000003f __SREG__
+/var/folders/ek/ekeCha+GHRG6c1igLEjgNU+++TI/-Tmp-//ccI3TpR4.s:4      *ABS*:000000000000003e __SP_H__
+/var/folders/ek/ekeCha+GHRG6c1igLEjgNU+++TI/-Tmp-//ccI3TpR4.s:5      *ABS*:000000000000003d __SP_L__
+/var/folders/ek/ekeCha+GHRG6c1igLEjgNU+++TI/-Tmp-//ccI3TpR4.s:6      *ABS*:0000000000000000 __tmp_reg__
+/var/folders/ek/ekeCha+GHRG6c1igLEjgNU+++TI/-Tmp-//ccI3TpR4.s:7      *ABS*:0000000000000001 __zero_reg__
+/var/folders/ek/ekeCha+GHRG6c1igLEjgNU+++TI/-Tmp-//ccI3TpR4.s:87     .data:0000000000000000 uart_str
+/var/folders/ek/ekeCha+GHRG6c1igLEjgNU+++TI/-Tmp-//ccI3TpR4.s:161    .text:0000000000000028 uart_putch
+/var/folders/ek/ekeCha+GHRG6c1igLEjgNU+++TI/-Tmp-//ccI3TpR4.s:203    .text:000000000000004a uart_getch
+/var/folders/ek/ekeCha+GHRG6c1igLEjgNU+++TI/-Tmp-//ccI3TpR4.s:98     .text:0000000000000000 uart_init
+/var/folders/ek/ekeCha+GHRG6c1igLEjgNU+++TI/-Tmp-//ccI3TpR4.s:130    .text:0000000000000018 uart_flush
+/var/folders/ek/ekeCha+GHRG6c1igLEjgNU+++TI/-Tmp-//ccI3TpR4.s:243    .text:0000000000000068 ansi_cl
+/var/folders/ek/ekeCha+GHRG6c1igLEjgNU+++TI/-Tmp-//ccI3TpR4.s:302    .text:00000000000000ca ansi_me
+/var/folders/ek/ekeCha+GHRG6c1igLEjgNU+++TI/-Tmp-//ccI3TpR4.s:349    .text:000000000000010c SPI_Write
+/var/folders/ek/ekeCha+GHRG6c1igLEjgNU+++TI/-Tmp-//ccI3TpR4.s:413    .text:000000000000013a SPI_Read
+/var/folders/ek/ekeCha+GHRG6c1igLEjgNU+++TI/-Tmp-//ccI3TpR4.s:482    .data:000000000000000e C.0.1584
+/var/folders/ek/ekeCha+GHRG6c1igLEjgNU+++TI/-Tmp-//ccI3TpR4.s:515    .text:000000000000016c W5100_Init
+/var/folders/ek/ekeCha+GHRG6c1igLEjgNU+++TI/-Tmp-//ccI3TpR4.s:1086   .text:00000000000004f6 main
+
+UNDEFINED SYMBOLS
+__do_copy_data
+__do_clear_bss
+__iob
+fputc
+printf
+puts
+__stack
