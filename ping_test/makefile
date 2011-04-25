@@ -15,7 +15,7 @@
 # MCU = attiny13
 # MCU = attiny2313
 # MCU = atmega8
-MCU = atmega168
+MCU = atmega328p
 
 # Target file name (without extension).
 TARGET = wiznetping
@@ -26,7 +26,7 @@ TARGET = wiznetping
 # AVRDUDE_PROGRAMMER = dragon_isp
 AVRDUDE_PROGRAMMER = ponyser
 
-AVRDUDE_PORT = /dev/ttyS1
+AVRDUDE_PORT = /dev/ttyS0
 #AVRDUDE_PORT = usb			# linux for dragon
 #AVRDUDE_PORT = /dev/parport0           # linux
 #AVRDUDE_PORT = lpt1		       # windows
@@ -183,7 +183,7 @@ REMOVE = rm -f
 COPY = cp
 
 HEXSIZE = $(SIZE) --target=$(FORMAT) $(TARGET).hex
-ELFSIZE = $(SIZE) -AC --mcu=$(MCU) $(TARGET).elf
+ELFSIZE = $(SIZE) -A --mcu=$(MCU) $(TARGET).elf
 
 
 

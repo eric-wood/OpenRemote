@@ -15,7 +15,8 @@
 # MCU = attiny13
 # MCU = attiny2313
 # MCU = atmega8
-MCU = atmega168
+#MCU = atmega168
+MCU = atmega328p
 
 # Target file name (without extension).
 TARGET = web_server
@@ -26,7 +27,7 @@ TARGET = web_server
 # AVRDUDE_PROGRAMMER = dragon_isp
 AVRDUDE_PROGRAMMER = ponyser
 
-AVRDUDE_PORT = /dev/ttyS1
+AVRDUDE_PORT = /dev/ttyS0
 #AVRDUDE_PORT = usb			# linux for dragon
 #AVRDUDE_PORT = /dev/parport0           # linux
 #AVRDUDE_PORT = lpt1		       # windows
