@@ -260,8 +260,8 @@ uint16_t send(uint8_t sock,const uint8_t *buf,uint16_t buflen)
      txsize=SPI_Read(SO_TX_FSR);
      txsize=(((txsize & 0x00FF) << 8 ) + SPI_Read(SO_TX_FSR + 1));
 
-     // Timeout for approx 1000 ms
-     if (timeout++ > 1000) {
+     // Timeout for approx 5000 ms
+     if (timeout++ > 5000) {
        // Disconnect the connection
        disconnect(sock);
        return 0;
@@ -446,7 +446,7 @@ int main(void){
 						//strcat((char *)buf,radiostat1);
 						//strcat_P((char *)buf,PSTR(">Scanning LED\r\n"));
 						//strcat_P((char *)buf,PSTR("</strong><p>\r\n"));
-						strcat_P((char *)buf,PSTR("<input type=\"submit\">\r\n"));
+						strcpy_P((char *)buf,PSTR("<input type=\"submit\">\r\n"));
 						strcat_P((char *)buf,PSTR("</form></span></body></html>\r\n"));
 						// Now Send the HTTP Remaining Response
 						if (send(sockreg,buf,strlen((char *)buf)) <= 0) break;
