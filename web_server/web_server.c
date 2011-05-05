@@ -114,6 +114,7 @@ void SPI_Write(uint16_t addr,uint8_t data)
   // CS pin is not active
   SPI_PORT |= (1<<SPI_CS);
 }
+
 unsigned char SPI_Read(uint16_t addr)
 {
   // Activate the CS pin
@@ -140,6 +141,7 @@ unsigned char SPI_Read(uint16_t addr)
   SPI_PORT |= (1<<SPI_CS);
   return(SPDR);
 }
+
 void W5100_Init(void)
 {
   // Ethernet Setup
@@ -176,6 +178,7 @@ void W5100_Init(void)
   SPI_Write(RMSR,NET_MEMALLOC);
   SPI_Write(TMSR,NET_MEMALLOC);
 }
+
 void close(uint8_t sock)
 {
    if (sock != 0) return;
@@ -185,6 +188,7 @@ void close(uint8_t sock)
    // Waiting until the S0_CR is clear
    while(SPI_Read(S0_CR));
 }
+
 void disconnect(uint8_t sock)
 {
    if (sock != 0) return;
@@ -193,6 +197,7 @@ void disconnect(uint8_t sock)
    // Wait for Disconecting Process
    while(SPI_Read(S0_CR));
 }
+
 uint8_t socket(uint8_t sock,uint8_t eth_protocol,uint16_t tcp_port)
 {
     uint8_t retval=0;
@@ -219,6 +224,7 @@ uint8_t socket(uint8_t sock,uint8_t eth_protocol,uint16_t tcp_port)
 
     return retval;
 }
+
 uint8_t listen(uint8_t sock)
 {
    uint8_t retval = 0;
@@ -237,30 +243,25 @@ uint8_t listen(uint8_t sock)
     }
     return retval;
 }
+
 uint16_t send(uint8_t sock,const uint8_t *buf,uint16_t buflen)
 {
-    uint16_t ptr,offaddr,realaddr,txsize,timeout;   
+   uint16_t ptr,offaddr,realaddr,txsize,timeout;   
 
-    if (buflen <= 0 || sock != 0) return 0;
-#if _DEBUG_MODE
-    printf("Send Size: %d\n",buflen);
-#endif
-    // Make sure the TX Free Size Register is available
-    txsize=SPI_Read(SO_TX_FSR);
-    txsize=(((txsize & 0x00FF) << 8 ) + SPI_Read(SO_TX_FSR + 1));
-#if _DEBUG_MODE
-    printf("TX Free Size: %d\n",txsize);
-#endif
-    timeout=0;
-    while (txsize < buflen) {
+   if (buflen <= 0 || sock != 0) return 0;
+
+   // Make sure the TX Free Size Register is available
+   txsize=SPI_Read(SO_TX_FSR);
+   txsize=(((txsize & 0x00FF) << 8 ) + SPI_Read(SO_TX_FSR + 1));
+
+   timeout=0;
+   while (txsize < buflen) {
       _delay_ms(1);
      txsize=SPI_Read(SO_TX_FSR);
      txsize=(((txsize & 0x00FF) << 8 ) + SPI_Read(SO_TX_FSR + 1));
+
      // Timeout for approx 1000 ms
      if (timeout++ > 1000) {
-#if _DEBUG_MODE
-       printf("TX Free Size Error!\n");
-#endif
        // Disconnect the connection
        disconnect(sock);
        return 0;
@@ -270,32 +271,30 @@ uint16_t send(uint8_t sock,const uint8_t *buf,uint16_t buflen)
    // Read the Tx Write Pointer
    ptr = SPI_Read(S0_TX_WR);
    offaddr = (((ptr & 0x00FF) << 8 ) + SPI_Read(S0_TX_WR + 1));
-#if _DEBUG_MODE
-    printf("TX Buffer: %x\n",offaddr);
-#endif	
 
-    while(buflen) {
-      buflen--;
-      // Calculate the real W5100 physical Tx Buffer Address
-      realaddr = TXBUFADDR + (offaddr & TX_BUF_MASK);
-      // Copy the application data to the W5100 Tx Buffer
-      SPI_Write(realaddr,*buf);
-      offaddr++;
-      buf++;
-    }
+   while(buflen) {
+     buflen--;
+     // Calculate the real W5100 physical Tx Buffer Address
+     realaddr = TXBUFADDR + (offaddr & TX_BUF_MASK);
+     // Copy the application data to the W5100 Tx Buffer
+     SPI_Write(realaddr,*buf);
+     offaddr++;
+     buf++;
+   }
 
-    // Increase the S0_TX_WR value, so it point to the next transmit
-    SPI_Write(S0_TX_WR,(offaddr & 0xFF00) >> 8 );
-    SPI_Write(S0_TX_WR + 1,(offaddr & 0x00FF));	
+   // Increase the S0_TX_WR value, so it point to the next transmit
+   SPI_Write(S0_TX_WR,(offaddr & 0xFF00) >> 8 );
+   SPI_Write(S0_TX_WR + 1,(offaddr & 0x00FF));	
 
-    // Now Send the SEND command
-    SPI_Write(S0_CR,CR_SEND);
+   // Now Send the SEND command
+   SPI_Write(S0_CR,CR_SEND);
 
-    // Wait for Sending Process
-    while(SPI_Read(S0_CR));	
+   // Wait for Sending Process
+   while(SPI_Read(S0_CR));	
 
-    return 1;
+   return 1;
 }
+
 uint16_t recv(uint8_t sock,uint8_t *buf,uint16_t buflen)
 {
     uint16_t ptr,offaddr,realaddr;   	
@@ -303,14 +302,11 @@ uint16_t recv(uint8_t sock,uint8_t *buf,uint16_t buflen)
     if (buflen <= 0 || sock != 0) return 1;   
 
     // If the request size > MAX_BUF,just truncate it
-    if (buflen > MAX_BUF)
+    if (buflen > MAX_BUF - 1)
       buflen=MAX_BUF - 2;
     // Read the Rx Read Pointer
     ptr = SPI_Read(S0_RX_RD);
     offaddr = (((ptr & 0x00FF) << 8 ) + SPI_Read(S0_RX_RD + 1));
-#if _DEBUG_MODE
-    printf("RX Buffer: %x\n",offaddr);
-#endif	
 
     while(buflen) {
       buflen--;
@@ -331,10 +327,12 @@ uint16_t recv(uint8_t sock,uint8_t *buf,uint16_t buflen)
 
     return 1;
 }
+
 uint16_t recv_size(void)
 {
   return ((SPI_Read(S0_RX_RSR) & 0x00FF) << 8 ) + SPI_Read(S0_RX_RSR + 1);
 }
+
 int strindex(char *s,char *t)
 {
   uint16_t i,n;
@@ -346,55 +344,7 @@ int strindex(char *s,char *t)
   }
   return -1;
 }
-ISR(TIMER0_OVF_vect)
-{
-  static unsigned char tenms=1;
-  tenms++;                  // Read ADC every 20 x 10ms = 200 milisecond
-  if (tenms >= 20) {
-    cli();                                // Disable Interupt
-    // Select the LED Mode here
-    if (ledmode == 1) {
-      if (ledeye <= 0) ledeye=0x01;
-      if (ledsign == 0) {
-	PORTD=ledeye;
-	ledeye=ledeye << 1;
-	if (ledeye >= 0x80) ledsign=1;
-      } else {
-	PORTD=ledeye;
-	ledeye=ledeye >> 1;
-	if (ledeye <= 0x01) ledsign=0;
-      }
-    } else {
-      if (ledsign == 0) {
-	PORTD=0x00;
-	ledsign=1;
-      } else {
-	PORTD=0xFF;
-	ledsign=0;
-      }
-    }
-    // Set ADMUX Channel for LM35DZ Input
-    ADMUX=0x01;
-    // Start conversion by setting ADSC on ADCSRA Register
-    ADCSRA |= (1<<ADSC);
-    // wait until convertion complete ADSC=0 -> Complete
-    while (ADCSRA & (1<<ADSC));
-    // Get the ADC Result
-    tempvalue = ADCW;
-    // ADC = (Vin x 1024) / Vref, Vref = 1 Volt, LM35DZ Out = 10mv/C
-    tempvalue = (int)(tempvalue) / 10.24;
 
-    tenms=1;	 
-
-    sei();                            // Enable Interupt
-  }
-  // Start counter from 0x94, overflow at 10 mSec
-  TCNT0=0x94;
-}
-#if _DEBUG_MODE
-// Assign I/O stream to UART
-FILE uart_str = FDEV_SETUP_STREAM(uart_putch, uart_getch, _FDEV_SETUP_RW);
-#endif
 int main(void){
   uint8_t sockstat;
   uint16_t rsize;
@@ -405,18 +355,6 @@ int main(void){
   DDRD = 0xFF;       // Set PORTD as Output
   PORTD = 0x00;	     
 
-#if _DEBUG_MODE
-  // Define Output/Input Stream
-  stdout = stdin = &uart_str;
-  // Initial UART Peripheral
-  uart_init();
-  // Clear Screen
-  ansi_me();
-  ansi_cl();
-  ansi_me();
-  ansi_cl();
-  uart_flush();
-#endif
   // Initial ATMega386 ADC Peripheral
   ADCSRA = (1<<ADEN) | (1<<ADPS2) | (1<<ADPS1);
   // Free running ADC Mode
@@ -445,9 +383,6 @@ int main(void){
   ledmode=1;
   ledeye=0x01;                  // Initial LED Eye Variables
   ledsign=0;
-#if _DEBUG_MODE
-  printf("WEB Server Debug Mode\n\n");
-#endif
 
   // Loop forever
   for(;;){
@@ -455,97 +390,83 @@ int main(void){
     switch(sockstat) {
      case SOCK_CLOSED:
         if (socket(sockreg,MR_TCP,TCP_PORT) > 0) {
-	  // Listen to Socket 0
-	  if (listen(sockreg) <= 0)
-	    _delay_ms(1);
-#if _DEBUG_MODE
-          printf("Socket Listen!\n");
-#endif
-	}
-	break;
+					// Listen to Socket 0
+					if (listen(sockreg) <= 0)
+						_delay_ms(1);
+				}
+				break;
      case SOCK_ESTABLISHED:
-	// Get the client request size
+				// Get the client request size
         rsize=recv_size();
-#if _DEBUG_MODE
-	printf("Size: %d\n",rsize);
-#endif
-	if (rsize > 0) {
-	  // Now read the client Request
-	  if (recv(sockreg,buf,rsize) <= 0) break;
-#if _DEBUG_MODE
-  	  printf("Content:\n%s\n",buf);
-#endif
+				if (rsize > 0)
+				{
+					// Now read the client Request
+					if (recv(sockreg,buf,rsize) <= 0) break;
           // Check the Request Header
-	  getidx=strindex((char *)buf,"GET /");
-	  postidx=strindex((char *)buf,"POST /");
-	  if (getidx >= 0 || postidx >= 0) {
-#if _DEBUG_MODE
-	    printf("Req. Check!\n");
-#endif
+					getidx=strindex((char *)buf,"GET /");
+					postidx=strindex((char *)buf,"POST /");
+					if (getidx >= 0 || postidx >= 0)
+					{
             // Now check the Radio Button for POST request
-	    if (postidx >= 0) {
-	      if (strindex((char *)buf,"radio=0") > 0)
-	        ledmode=0;
-	      if (strindex((char *)buf,"radio=1") > 0)
-	        ledmode=1;
+						if (postidx >= 0) {
+							if (strindex((char *)buf,"radio=0") > 0)
+								ledmode=0;
+							if (strindex((char *)buf,"radio=1") > 0)
+								ledmode=1;
             }
-#if _DEBUG_MODE
-	    printf("Req. Send!\n");
-#endif
-	    // Create the HTTP Response	Header
-	    strcpy_P((char *)buf,PSTR("HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n"));
-	    strcat_P((char *)buf,PSTR("<html><body><span style=\"color:#0000A0\">\r\n"));
-	    strcat_P((char *)buf,PSTR("<h1>Embedded Web Server</h1>\r\n"));
-	    strcat_P((char *)buf,PSTR("<h3>AVRJazz Mega328 and WIZ811MJ</h3>\r\n"));
-	    strcat_P((char *)buf,PSTR("<p><form method=\"POST\">\r\n"));
-	    // Now Send the HTTP Response
-	    if (send(sockreg,buf,strlen((char *)buf)) <= 0) break;
 
-	    // Create the HTTP Temperature Response
-	    sprintf((char *)temp,"%d",tempvalue);        // Convert temperature value to string
-	    strcpy_P((char *)buf,PSTR("<strong>Temp: <input type=\"text\" size=2 value=\""));
-	    strcat((char *)buf,temp);
-	    strcat_P((char *)buf,PSTR("\"> <sup>O</sup>C\r\n"));									
+						// Create the HTTP Response	Header
+						strcpy_P((char *)buf,PSTR("HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n"));
+						strcat_P((char *)buf,PSTR("<html><body><span style=\"color:#0000A0\">\r\n"));
+						strcat_P((char *)buf,PSTR("<h1>OpenRemote</h1>\r\n"));
+						strcat_P((char *)buf,PSTR("<h3>Web server test. Does it work?</h3>\r\n"));
+						strcat_P((char *)buf,PSTR("<p><form method=\"POST\">\r\n"));
+						// Now Send the HTTP Response
+						if (send(sockreg,buf,strlen((char *)buf)) <= 0) break;
 
-	    if (ledmode == 1) {
-	      strcpy(radiostat0,"");
-	      strcpy_P(radiostat1,PSTR("checked"));
-	    } else {
-	      strcpy_P(radiostat0,PSTR("checked"));
-	      strcpy(radiostat1,"");
-	    }
-            // Create the HTTP Radio Button 0 Response
-	    strcat_P((char *)buf,PSTR("<p><input type=\"radio\" name=\"radio\" value=\"0\" "));
-	    strcat((char *)buf,radiostat0);
-	    strcat_P((char *)buf,PSTR(">Blinking LED\r\n"));
-	    strcat_P((char *)buf,PSTR("<br><input type=\"radio\" name=\"radio\" value=\"1\" "));
-	    strcat((char *)buf,radiostat1);
-	    strcat_P((char *)buf,PSTR(">Scanning LED\r\n"));
- 	    strcat_P((char *)buf,PSTR("</strong><p>\r\n"));
-	    strcat_P((char *)buf,PSTR("<input type=\"submit\">\r\n"));
-	    strcat_P((char *)buf,PSTR("</form></span></body></html>\r\n"));
-            // Now Send the HTTP Remaining Response
-	    if (send(sockreg,buf,strlen((char *)buf)) <= 0) break;
+						// Create the HTTP Temperature Response
+						sprintf((char *)temp,"%d",tempvalue);        // Convert temperature value to string
+						strcpy_P((char *)buf,PSTR("<strong>Temp: <input type=\"text\" size=2 value=\""));
+						strcat((char *)buf,temp);
+						strcat_P((char *)buf,PSTR("\"> <sup>O</sup>C\r\n"));									
+
+						if (ledmode == 1) {
+							strcpy(radiostat0,"");
+							strcpy_P(radiostat1,PSTR("checked"));
+						} else {
+							strcpy_P(radiostat0,PSTR("checked"));
+							strcpy(radiostat1,"");
+						}
+
+						// Create the HTTP Radio Button 0 Response
+						strcat_P((char *)buf,PSTR("<p><input type=\"radio\" name=\"radio\" value=\"0\" "));
+						strcat((char *)buf,radiostat0);
+						strcat_P((char *)buf,PSTR(">Blinking LED\r\n"));
+						strcat_P((char *)buf,PSTR("<br><input type=\"radio\" name=\"radio\" value=\"1\" "));
+						strcat((char *)buf,radiostat1);
+						strcat_P((char *)buf,PSTR(">Scanning LED\r\n"));
+						strcat_P((char *)buf,PSTR("</strong><p>\r\n"));
+						strcat_P((char *)buf,PSTR("<input type=\"submit\">\r\n"));
+						strcat_P((char *)buf,PSTR("</form></span></body></html>\r\n"));
+						// Now Send the HTTP Remaining Response
+						if (send(sockreg,buf,strlen((char *)buf)) <= 0) break;
           }
-	  // Disconnect the socket
-	  disconnect(sockreg);
+					// Disconnect the socket
+					disconnect(sockreg);
         } else
-	  _delay_us(10);    // Wait for request
-	break;
+					_delay_us(10);    // Wait for request
+				break;
       case SOCK_FIN_WAIT:
       case SOCK_CLOSING:
       case SOCK_TIME_WAIT:
       case SOCK_CLOSE_WAIT:
       case SOCK_LAST_ACK:
         // Force to close the socket
-	close(sockreg);
-#if _DEBUG_MODE
-	printf("Socket Close!\n");
-#endif
-	break;
+				close(sockreg);
+
+				break;
     }
   }
   return 0;
 }
-/* EOF: wiznetweb.c */
 
