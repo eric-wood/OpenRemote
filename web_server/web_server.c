@@ -425,27 +425,27 @@ int main(void){
 						if (send(sockreg,buf,strlen((char *)buf)) <= 0) break;
 
 						// Create the HTTP Temperature Response
-						sprintf((char *)temp,"%d",tempvalue);        // Convert temperature value to string
-						strcpy_P((char *)buf,PSTR("<strong>Temp: <input type=\"text\" size=2 value=\""));
-						strcat((char *)buf,temp);
-						strcat_P((char *)buf,PSTR("\"> <sup>O</sup>C\r\n"));									
+						// sprintf((char *)temp,"%d",tempvalue);        // Convert temperature value to string
+						// strcpy_P((char *)buf,PSTR("<strong>Temp: <input type=\"text\" size=2 value=\""));
+						// strcat((char *)buf,temp);
+						// strcat_P((char *)buf,PSTR("\"> <sup>O</sup>C\r\n"));									
 
-						if (ledmode == 1) {
-							strcpy(radiostat0,"");
-							strcpy_P(radiostat1,PSTR("checked"));
-						} else {
-							strcpy_P(radiostat0,PSTR("checked"));
-							strcpy(radiostat1,"");
-						}
+						//if (ledmode == 1) {
+						//	strcpy(radiostat0,"");
+						//	strcpy_P(radiostat1,PSTR("checked"));
+						//} else {
+						//	strcpy_P(radiostat0,PSTR("checked"));
+						//	strcpy(radiostat1,"");
+						//}
 
 						// Create the HTTP Radio Button 0 Response
-						strcat_P((char *)buf,PSTR("<p><input type=\"radio\" name=\"radio\" value=\"0\" "));
-						strcat((char *)buf,radiostat0);
-						strcat_P((char *)buf,PSTR(">Blinking LED\r\n"));
-						strcat_P((char *)buf,PSTR("<br><input type=\"radio\" name=\"radio\" value=\"1\" "));
-						strcat((char *)buf,radiostat1);
-						strcat_P((char *)buf,PSTR(">Scanning LED\r\n"));
-						strcat_P((char *)buf,PSTR("</strong><p>\r\n"));
+						//strcat_P((char *)buf,PSTR("<p><input type=\"radio\" name=\"radio\" value=\"0\" "));
+						//strcat((char *)buf,radiostat0);
+						//strcat_P((char *)buf,PSTR(">Blinking LED\r\n"));
+						//strcat_P((char *)buf,PSTR("<br><input type=\"radio\" name=\"radio\" value=\"1\" "));
+						//strcat((char *)buf,radiostat1);
+						//strcat_P((char *)buf,PSTR(">Scanning LED\r\n"));
+						//strcat_P((char *)buf,PSTR("</strong><p>\r\n"));
 						strcat_P((char *)buf,PSTR("<input type=\"submit\">\r\n"));
 						strcat_P((char *)buf,PSTR("</form></span></body></html>\r\n"));
 						// Now Send the HTTP Remaining Response
