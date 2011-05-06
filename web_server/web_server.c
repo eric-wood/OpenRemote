@@ -345,6 +345,39 @@ int strindex(char *s,char *t)
   return -1;
 }
 
+char* post_value(char* field, char* header)
+{
+	char* ch_ptr;
+	char content_type[] = "Content-Type: application/x-www-form-urlencoded";
+
+	ch_ptr = strtok(header, "\n");
+
+	while(ch_ptr != NULL)
+	{
+		if(strcmp(ch_ptr, content_type) == 0)
+		{
+			break;
+		}
+		ch_ptr = strtok(NULL, "\n");
+  }
+
+	ch_ptr = strtok(NULL, "\n");
+	ch_ptr = strtok(ch_ptr, "&");
+	while(ch_ptr != NULL)
+	{
+		char* field_loc = strstr(ch_ptr, field);
+		field_loc += strlen(field) + 1; // Skip the '='
+
+		if(field_loc != NULL)
+		{
+			return field_loc;
+		}
+
+		ch_ptr = strtok(NULL, "&");
+	}
+	return NULL;
+}
+
 int main(void){
   uint8_t sockstat;
   uint16_t rsize;
