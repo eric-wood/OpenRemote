@@ -16,6 +16,9 @@
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
+
+#define byte uint8_t
+
 // AVRJazz Mega328 SPI I/O
 #define SPI_PORT PORTB
 #define SPI_DDR  DDRB
@@ -180,7 +183,6 @@ void W5100_Init(void)
 
 void close(uint8_t sock)
 {
-   delay(100);
    if (sock != 0) return;
 
    // Send Close Command
@@ -191,7 +193,6 @@ void close(uint8_t sock)
 
 void disconnect(uint8_t sock)
 {
-   delay(100);
    if (sock != 0) return;
 
    // Send Disconnect Command
@@ -351,6 +352,8 @@ char* post_value(char* field, char* header)
 {
 	char* ch_ptr;
 	char* old;
+	
+	old = NULL;
 
 	ch_ptr = strtok(header, "\n");
 	while(ch_ptr != NULL)
@@ -378,9 +381,9 @@ void convert_code(char* code) {
   //byte* end = CODE_BUFFER + CODE_BUFFER_SIZE;
   byte* end = buf + MAX_BUF;
   byte* ptr = buf;
-  boolean high = true;
+  byte high = 1;
   
-  while(*code != NULL && ptr != end) {
+  while(*code != 0 && ptr != end) {
     uint8_t b = hex2bin(*code);
     if(0 <= b && b <= 15) {
       if(high) {
@@ -399,10 +402,9 @@ void convert_code(char* code) {
   CODE_BUFFER_SIZE = ptr - buf;
 }
 
-void main(void){
+int main(void){
   uint8_t sockstat;
   uint16_t rsize;
-  char temp[4];
   char* code;
   int getidx,postidx;
   int is_favicon;
