@@ -85,10 +85,9 @@
 
 // Define W5100 Socket Register and Variables Used
 uint8_t sockreg;
-#define MAX_BUF 512
+#define MAX_BUF 1024
 uint8_t buf[MAX_BUF];
-int tempvalue;
-uint8_t ledmode,ledeye,ledsign;
+uint16_t CODE_BUFFER_SIZE;
 
 void SPI_Write(uint16_t addr,uint8_t data)
 {
@@ -181,6 +180,7 @@ void W5100_Init(void)
 
 void close(uint8_t sock)
 {
+   delay(100);
    if (sock != 0) return;
 
    // Send Close Command
@@ -191,7 +191,9 @@ void close(uint8_t sock)
 
 void disconnect(uint8_t sock)
 {
+   delay(100);
    if (sock != 0) return;
+
    // Send Disconnect Command
    SPI_Write(S0_CR,CR_DISCON);
    // Wait for Disconecting Process
@@ -244,7 +246,7 @@ uint8_t listen(uint8_t sock)
     return retval;
 }
 
-uint16_t send(uint8_t sock,const uint8_t *buf,uint16_t buflen)
+uint16_t send_pack(uint8_t sock,const uint8_t *buf,uint16_t buflen)
 {
    uint16_t ptr,offaddr,realaddr,txsize,timeout;   
 
@@ -348,41 +350,62 @@ int strindex(char *s,char *t)
 char* post_value(char* field, char* header)
 {
 	char* ch_ptr;
-	char content_type[] = "Content-Type: application/x-www-form-urlencoded";
+	char* old;
 
 	ch_ptr = strtok(header, "\n");
-
 	while(ch_ptr != NULL)
 	{
-		if(strcmp(ch_ptr, content_type) == 0)
-		{
-			break;
-		}
+		old = ch_ptr;
 		ch_ptr = strtok(NULL, "\n");
-  }
-
-	ch_ptr = strtok(NULL, "\n");
-	ch_ptr = strtok(ch_ptr, "&");
-	while(ch_ptr != NULL)
-	{
-		char* field_loc = strstr(ch_ptr, field);
-		field_loc += strlen(field) + 1; // Skip the '='
-
-		if(field_loc != NULL)
-		{
-			return field_loc;
-		}
-
-		ch_ptr = strtok(NULL, "&");
 	}
-	return NULL;
+
+	old += strlen(field) + 1;
+	return old;
 }
 
-int main(void){
+uint8_t hex2bin(uint8_t b) {
+  b -= '0';
+  if(b > 9) {
+    b += '0'-'A'+10;
+  }
+  if(b > 15) {
+    b += 'A'-'a';
+  }
+  return b;
+}
+
+void convert_code(char* code) {
+  //byte* end = CODE_BUFFER + CODE_BUFFER_SIZE;
+  byte* end = buf + MAX_BUF;
+  byte* ptr = buf;
+  boolean high = true;
+  
+  while(*code != NULL && ptr != end) {
+    uint8_t b = hex2bin(*code);
+    if(0 <= b && b <= 15) {
+      if(high) {
+        *ptr = b;
+        *ptr <<= 4;
+        high = !high;
+      } else {
+        *ptr += b;
+        ptr++;
+        high = !high;
+      }
+    }
+    code++;
+  }
+
+  CODE_BUFFER_SIZE = ptr - buf;
+}
+
+void main(void){
   uint8_t sockstat;
   uint16_t rsize;
-  char radiostat0[10],radiostat1[10],temp[4];
+  char temp[4];
+  char* code;
   int getidx,postidx;
+  int is_favicon;
 
   // Reset Port D
   DDRD = 0xFF;       // Set PORTD as Output
@@ -412,10 +435,6 @@ int main(void){
   W5100_Init();
   // Initial variable used
   sockreg=0;
-  tempvalue=0;
-  ledmode=1;
-  ledeye=0x01;                  // Initial LED Eye Variables
-  ledsign=0;
 
   // Loop forever
   for(;;){
@@ -423,83 +442,63 @@ int main(void){
     switch(sockstat) {
      case SOCK_CLOSED:
         if (socket(sockreg,MR_TCP,TCP_PORT) > 0) {
-					// Listen to Socket 0
-					if (listen(sockreg) <= 0)
-						_delay_ms(1);
-				}
-				break;
+          // Listen to Socket 0
+          if (listen(sockreg) <= 0)
+            _delay_ms(1);
+        }
+        break;
      case SOCK_ESTABLISHED:
-				// Get the client request size
+        // Get the client request size
         rsize=recv_size();
-				if (rsize > 0)
-				{
-					// Now read the client Request
-					if (recv(sockreg,buf,rsize) <= 0) break;
+        if (rsize > 0)
+        {
+          // Now read the client Request
+          if (recv(sockreg,buf,rsize) <= 0) break;
           // Check the Request Header
-					getidx=strindex((char *)buf,"GET /");
-					postidx=strindex((char *)buf,"POST /");
-					if (getidx >= 0 || postidx >= 0)
-					{
-            // Now check the Radio Button for POST request
-						if (postidx >= 0) {
-							if (strindex((char *)buf,"radio=0") > 0)
-								ledmode=0;
-							if (strindex((char *)buf,"radio=1") > 0)
-								ledmode=1;
-            }
-
-						// Create the HTTP Response	Header
-						strcpy_P((char *)buf,PSTR("HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n"));
-						strcat_P((char *)buf,PSTR("<html><body><span style=\"color:#0000A0\">\r\n"));
-						strcat_P((char *)buf,PSTR("<h1>OpenRemote</h1>\r\n"));
-						strcat_P((char *)buf,PSTR("<h3>Web server test. Does it work?</h3>\r\n"));
-						strcat_P((char *)buf,PSTR("<p><form method=\"POST\">\r\n"));
-						// Now Send the HTTP Response
-						if (send(sockreg,buf,strlen((char *)buf)) <= 0) break;
-
-						// Create the HTTP Temperature Response
-						// sprintf((char *)temp,"%d",tempvalue);        // Convert temperature value to string
-						// strcpy_P((char *)buf,PSTR("<strong>Temp: <input type=\"text\" size=2 value=\""));
-						// strcat((char *)buf,temp);
-						// strcat_P((char *)buf,PSTR("\"> <sup>O</sup>C\r\n"));									
-
-						//if (ledmode == 1) {
-						//	strcpy(radiostat0,"");
-						//	strcpy_P(radiostat1,PSTR("checked"));
-						//} else {
-						//	strcpy_P(radiostat0,PSTR("checked"));
-						//	strcpy(radiostat1,"");
-						//}
-
-						// Create the HTTP Radio Button 0 Response
-						//strcat_P((char *)buf,PSTR("<p><input type=\"radio\" name=\"radio\" value=\"0\" "));
-						//strcat((char *)buf,radiostat0);
-						//strcat_P((char *)buf,PSTR(">Blinking LED\r\n"));
-						//strcat_P((char *)buf,PSTR("<br><input type=\"radio\" name=\"radio\" value=\"1\" "));
-						//strcat((char *)buf,radiostat1);
-						//strcat_P((char *)buf,PSTR(">Scanning LED\r\n"));
-						//strcat_P((char *)buf,PSTR("</strong><p>\r\n"));
-						strcpy_P((char *)buf,PSTR("<input type=\"submit\">\r\n"));
-						strcat_P((char *)buf,PSTR("</form></span></body></html>\r\n"));
-						// Now Send the HTTP Remaining Response
-						if (send(sockreg,buf,strlen((char *)buf)) <= 0) break;
+          getidx=strindex((char *)buf,"GET /");
+          postidx=strindex((char *)buf,"POST /");
+          
+          is_favicon = strindex((char *)buf, "favicon");
+          
+          if ((getidx >= 0 || postidx >= 0) && is_favicon < 0)
+          {            
+            char field[] = "code";
+            code = post_value(field, (char *)buf);
+            
+            convert_code(code);
+            
+            
+            // Create the HTTP Response Header
+            strcpy_P((char *)buf, PSTR("HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n"));
+            strcat_P((char *)buf, PSTR("<html><body><span style=\"color:#0000A0\">\r\n"));
+            strcat_P((char *)buf, PSTR("<h1>OpenRemote</h1>\r\n"));
+            strcat_P((char *)buf, PSTR("<h3>Please Enter Pronto Code Below:</h3>\r\n"));
+            strcat_P((char *)buf, PSTR("<p><form method=\"POST\">\r\n"));
+            // Now Send the HTTP Response
+            if (send_pack(sockreg, buf, strlen((char *)buf)) <= 0) break;
+            
+            strcpy_P((char *)buf, PSTR("Code: <textarea name=\"code\" rows=\"5\" cols=\"30\"></textarea><br />\r\n"));
+            strcat_P((char *)buf, PSTR("<input type=\"submit\">\r\n</form>"));
+            sprintf((char *)buf+strlen((char *)buf), "%u", CODE_BUFFER_SIZE);
+            strcat_P((char *)buf, PSTR("</p></span></body></html>\r\n"));
+            // Now Send the HTTP Remaining Response
+            if (send_pack(sockreg, buf, strlen((char *)buf)) <= 0) break;
           }
-					// Disconnect the socket
-					disconnect(sockreg);
-        } else
-					_delay_us(10);    // Wait for request
-				break;
+          // Disconnect the socket
+          disconnect(sockreg);
+        } else {
+          _delay_us(1000);    // Wait for request
+        }
+        break;
       case SOCK_FIN_WAIT:
       case SOCK_CLOSING:
       case SOCK_TIME_WAIT:
       case SOCK_CLOSE_WAIT:
       case SOCK_LAST_ACK:
         // Force to close the socket
-				close(sockreg);
-
-				break;
+        close(sockreg);
+        break;
     }
   }
-  return 0;
 }
 
